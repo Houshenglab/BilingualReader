@@ -1,0 +1,6 @@
+Python 3.12.14
+pdfminer.six 20251230
+cryptography 50.0.1
+charset-normalizer 3.5.1
+cffi 2.1.1
+pycparser 3.0

@@ -1,0 +1,15 @@
+build/
+dist/
+backups/
+docs/
+progress.md
+Resources/PDFEngine/python/
+.DS_Store
+._*
+__pycache__/
+*.pyc
+.env
+.env.*
+*.pem
+*.key
+/*.zip

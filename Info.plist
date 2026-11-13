@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>BilingualReader</string>
+<key>CFBundleIdentifier</key><string>local.bilingualreader.mac</string>
+<key>CFBundleName</key><string>双语阅读</string>
+<key>CFBundleDisplayName</key><string>双语阅读</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>0.6.1</string>
+<key>CFBundleVersion</key><string>7</string>
+<key>CFBundleIconFile</key><string>AppIcon.icns</string>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+<key>NSPrincipalClass</key><string>NSApplication</string>
+<key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>CFBundleDocumentTypes</key><array><dict>
+<key>CFBundleTypeName</key><string>阅读文档</string>
+<key>CFBundleTypeRole</key><string>Viewer</string>
+<key>LSHandlerRank</key><string>Alternate</string>
+<key>LSItemContentTypes</key><array><string>com.adobe.pdf</string><string>org.openxmlformats.wordprocessingml.document</string><string>public.plain-text</string></array>
+</dict></array>
+</dict></plist>
