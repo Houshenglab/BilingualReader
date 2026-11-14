@@ -1,14 +1,26 @@
 # 双语阅读 · BilingualReader
 
-macOS 本地 PDF、Word 和 TXT 双语阅读器。PDF 支持原页与译文对照、整段中英对照；Word 在原段落下方显示中文，并保留表格、图片和公式。
+**面向科研文献阅读的 macOS 双语阅读器，支持 PDF、Word（DOCX）和 TXT。**
+
+把英文论文、研究报告和笔记整理到分类书架中，在阅读原文时展开中文译文。支持整段与全文翻译，自动保存阅读位置和已完成译文，方便下次继续读。
 
 [下载最新版](https://github.com/Houshenglab/BilingualReader/releases/latest) · [版本记录](CHANGELOG.md) · [第三方许可](THIRD-PARTY-NOTICES.md)
 
+## 主要功能
+
+| 文献阅读场景 | 功能 |
+| --- | --- |
+| 阅读 PDF 论文 | 保留原页中的图表、公式与排版，点击英文段落，在侧栏查看中文；可切换段落对照。 |
+| 阅读 Word 资料 | 支持 DOCX 段内翻译，中文显示在原段落下方，保留表格、图片和公式。 |
+| 整理多份文献 | 分类书架、封面网格、书名搜索、批量导入与批量归类。 |
+| 连续阅读 | 自动恢复页码、段落位置、阅读模式、字号和已完成译文。 |
+| 按需翻译 | 支持单段及全文翻译、暂停与继续、本机译文缓存和中英对照 HTML 导出。 |
+
 ## 下载与安装
 
-1. 在 Releases 下载 `BilingualReader-0.6.1-macOS-arm64.zip`。
-2. 解压，将 `双语阅读-0.6.1.app` 拖到「应用程序」，然后打开。
-3. 点击「打开文档」，或拖入 PDF、DOCX、UTF-8 TXT 文件。
+1. [下载 macOS 安装包](https://github.com/Houshenglab/BilingualReader/releases/download/v0.7.2/BilingualReader-0.7.2-macOS-arm64.zip)，或前往 [Releases](https://github.com/Houshenglab/BilingualReader/releases/latest) 查看版本。
+2. 解压，将 `双语阅读-0.7.2.app` 拖到「应用程序」，然后打开。
+3. 点击「导入文档」，或拖入 PDF、DOCX、UTF-8 TXT 文件，开始整理和阅读。
 
 支持 **Apple Silicon（M 系列芯片）和 macOS 13 及以上**。目前未提供 Intel 版。
 应用使用本地临时签名，尚未经过 Apple 公证。确认来自本仓库后，可通过 macOS「系统设置 → 隐私与安全性」允许打开。下载页提供 SHA-256 校验文件。
@@ -64,8 +76,8 @@ Google 和必应网页接口不是有稳定性保证的官方付费 API，可能
 
 ```sh
 mkdir -p build/release-runtime
-ditto -x -k BilingualReader-0.6.1-macOS-arm64.zip build/release-runtime
-cp -R 'build/release-runtime/双语阅读-0.6.1.app/Contents/Resources/PDFEngine/python' Resources/PDFEngine/python
+ditto -x -k BilingualReader-0.7.2-macOS-arm64.zip build/release-runtime
+cp -R 'build/release-runtime/双语阅读-0.7.2.app/Contents/Resources/PDFEngine/python' Resources/PDFEngine/python
 zsh build.sh
 ```
 
@@ -80,6 +92,8 @@ zsh build.sh
 ```sh
 zsh check.sh
 zsh check-library.sh
+zsh check-categories.sh
+zsh check-shelf-scroll.sh
 zsh check-library-model.sh
 zsh check-layout.sh
 zsh check-reliability.sh
