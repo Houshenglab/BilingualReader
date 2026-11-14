@@ -35,6 +35,8 @@ final class ReaderModel: ObservableObject {
     let translator: WebTranslator
     let library: LibraryStore?
     @Published var libraryBooks: [LibraryBook] = []
+    @Published var libraryOrganization = LibraryOrganization()
+    @Published var libraryFilter: LibraryFilter = .all
     @Published var libraryCovers: [String: URL] = [:]
     @Published var showingLibrary = true
     @Published var libraryBusy = false

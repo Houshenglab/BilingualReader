@@ -37,10 +37,37 @@ import WebKit
             try png.write(to: output.appendingPathComponent(name + ".png"))
             print("PREVIEW: \(name)")
         }
+        @MainActor func click(_ point: NSPoint, in target: NSWindow) {
+            for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
+                let event = NSEvent.mouseEvent(with:type, location:point, modifierFlags:[], timestamp:ProcessInfo.processInfo.systemUptime,
+                    windowNumber:target.windowNumber, context:nil, eventNumber:0, clickCount:1, pressure:type == .leftMouseDown ? 1 : 0)!
+                NSApp.postEvent(event,atStart:false)
+            }
+        }
+        @MainActor func textField(in view:NSView) -> NSTextField? {
+            if let field=view as? NSTextField,field.isEditable { return field }
+            for child in view.subviews { if let field=textField(in:child) { return field } }
+            return nil
+        }
         Task { @MainActor in
             do {
                 UserDefaults.standard.set("shelf",forKey:"libraryDisplay")
                 try await capture("empty")
+                NSApp.activate(ignoringOtherApps:true)
+                click(NSPoint(x:998,y:682),in:window)
+                try await Task.sleep(nanoseconds:500_000_000)
+                guard let sheet=window.attachedSheet,let content=sheet.contentView,let field=textField(in:content) else { throw ReaderError.message("Category editor did not appear") }
+                field.stringValue="气候文献"
+                NotificationCenter.default.post(name:NSControl.textDidChangeNotification,object:field)
+                sheet.makeFirstResponder(field)
+                field.currentEditor()?.selectAll(nil)
+                field.currentEditor()?.insertText("气候文献")
+                try await Task.sleep(nanoseconds:200_000_000)
+                let savePoint=NSPoint(x:content.bounds.width-55,y:40)
+                click(savePoint,in:sheet)
+                for _ in 0..<100 where model.libraryOrganization.categories.isEmpty { try await Task.sleep(nanoseconds:20_000_000) }
+                guard let category=model.libraryOrganization.categories.first,category.name=="气候文献" else { throw ReaderError.message("Category editor did not save the name") }
+                print("PASS: native category editor creates a named category")
                 var imported:[LibraryBook]=[]
                 for path in CommandLine.arguments.dropFirst() { imported.append(try await store.importDocument(URL(fileURLWithPath:path))) }
                 let words=try await store.importDocument(URL(fileURLWithPath:FileManager.default.currentDirectoryPath).appendingPathComponent("fixtures/rich-example.docx"))
@@ -50,6 +77,36 @@ import WebKit
                     _=try await store.importDocument(file)
                 }
                 await model.refreshLibrary()
+                try await model.assignLibraryCategory(Set(imported.map(\.id)+[words.id]),to:category.id)
+                model.libraryFilter = .category(category.id)
+                try await capture("category-shelf")
+                click(NSPoint(x:1060,y:682),in:window)
+                try await Task.sleep(nanoseconds:400_000_000)
+                guard let batchSheet=window.attachedSheet else { throw ReaderError.message("Batch selection did not open") }
+                guard let batchContent=batchSheet.contentView else { throw ReaderError.message("Batch sheet has no content") }
+                try await capture("category-batch")
+                click(NSPoint(x:80,y:batchContent.bounds.height-150),in:batchSheet)
+                try await Task.sleep(nanoseconds:200_000_000)
+                try await capture("batch-selected")
+                click(NSPoint(x:155,y:80),in:batchSheet)
+                try await Task.sleep(nanoseconds:200_000_000)
+                let menuPoint=batchSheet.convertPoint(toScreen:NSPoint(x:130,y:55))
+                let menu=NSApp.windows.first { $0 !== window && $0 !== batchSheet && $0.isVisible && $0.frame.contains(menuPoint) }
+                guard let menu else { throw ReaderError.message("Native menu window unavailable") }
+                click(menu.convertPoint(fromScreen:menuPoint),in:menu)
+                try await Task.sleep(nanoseconds:200_000_000)
+                try await capture("batch-target")
+                click(NSPoint(x:batchContent.bounds.width-75,y:40),in:batchSheet)
+                for _ in 0..<100 where window.attachedSheet != nil { try await Task.sleep(nanoseconds:20_000_000) }
+                guard window.attachedSheet == nil,model.matchingBooks(query: "").isEmpty else { throw ReaderError.message("Native batch classification failed") }
+                print("PASS: native batch sheet selects visible documents and moves them to Uncategorized")
+                try await model.assignLibraryCategory(Set(imported.map(\.id)+[words.id]),to:category.id)
+                let emptyCategory=try await model.createLibraryCategory("待读")
+                model.libraryFilter = .category(emptyCategory.id)
+                try await capture("category-empty")
+                try await model.renameLibraryCategory(emptyCategory.id,name:"待读文献")
+                try await model.deleteLibraryCategory(emptyCategory.id)
+                model.libraryFilter = .all
                 try await capture("shelf")
                 UserDefaults.standard.set("grid",forKey:"libraryDisplay")
                 try await capture("grid")

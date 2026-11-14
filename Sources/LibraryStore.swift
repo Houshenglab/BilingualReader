@@ -27,6 +27,18 @@ struct ReadingSession: Codable {
 // Kept independent of the UI enum so disk/CLI checks need no SwiftUI runtime.
 private enum PDFReadingModeValue { static let original = "原页模式" }
 
+struct LibraryCategory: Codable, Identifiable, Equatable {
+    let id: String
+    var name: String
+}
+struct LibraryOrganization: Codable, Equatable {
+    var categories: [LibraryCategory] = []
+    var assignments: [String: String] = [:]
+}
+enum LibraryFilter: Hashable {
+    case all, uncategorized, category(String)
+}
+
 actor LibraryStore {
     private let root: URL
     private var books: [LibraryBook]?
@@ -54,6 +66,58 @@ actor LibraryStore {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try JSONEncoder().encode(values).write(to: index, options: .atomic)
         books = values
+    }
+    private var organizationURL: URL { root.appendingPathComponent("organization.json") }
+    func organization() throws -> LibraryOrganization {
+        guard FileManager.default.fileExists(atPath: organizationURL.path) else { return LibraryOrganization() }
+        do {
+            let result = try JSONDecoder().decode(LibraryOrganization.self, from: Data(contentsOf: organizationURL))
+            let ids = Set(result.categories.map(\.id))
+            guard ids.count == result.categories.count,
+                  result.categories.allSatisfy({ UUID(uuidString: $0.id) != nil && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+                  result.assignments.allSatisfy({ $0.key.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil && ids.contains($0.value) }) else {
+                throw ReaderError.message("分类数据格式错误")
+            }
+            return result
+        } catch { throw ReaderError.message("无法读取分类记录，已有文件已保留：\(error.localizedDescription)") }
+    }
+    private func writeOrganization(_ value: LibraryOrganization) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try JSONEncoder().encode(value).write(to: organizationURL, options: .atomic)
+    }
+    private func categoryName(_ input: String, in categories: [LibraryCategory], excluding id: String? = nil) throws -> String {
+        let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 40 else { throw ReaderError.message("分类名称请输入 1–40 个字") }
+        guard !["全部", "未分类"].contains(name) else { throw ReaderError.message("请使用“全部”和“未分类”以外的名称") }
+        guard !categories.contains(where: { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame }) else { throw ReaderError.message("这个分类名称已经存在") }
+        return name
+    }
+    func createCategory(_ name: String) throws -> LibraryCategory {
+        var value = try organization()
+        let category = LibraryCategory(id: UUID().uuidString, name: try categoryName(name, in: value.categories))
+        value.categories.append(category)
+        try writeOrganization(value)
+        return category
+    }
+    func renameCategory(_ id: String, name: String) throws {
+        var value = try organization()
+        guard let index = value.categories.firstIndex(where: { $0.id == id }) else { throw ReaderError.message("分类已不存在") }
+        value.categories[index].name = try categoryName(name, in: value.categories, excluding: id)
+        try writeOrganization(value)
+    }
+    func deleteCategory(_ id: String) throws {
+        var value = try organization()
+        value.categories.removeAll { $0.id == id }
+        value.assignments = value.assignments.filter { $0.value != id }
+        try writeOrganization(value)
+    }
+    func assignCategory(_ bookIDs: Set<String>, to categoryID: String?) throws {
+        var value = try organization()
+        if let categoryID, !value.categories.contains(where: { $0.id == categoryID }) { throw ReaderError.message("目标分类已不存在") }
+        let existing = Set(try list().map(\.id))
+        guard bookIDs.isSubset(of: existing) else { throw ReaderError.message("部分文档已被移除，请刷新书架后重试") }
+        for id in bookIDs { value.assignments[id] = categoryID }
+        try writeOrganization(value)
     }
     func importDocument(_ source: URL) throws -> LibraryBook {
         var values = try list()
@@ -131,7 +195,17 @@ actor LibraryStore {
     func remove(_ id: String) throws {
         let values = try list()
         guard values.contains(where: { $0.id == id }) else { return }
-        try writeIndex(values.filter { $0.id != id })
+        let previousOrganization = try organization()
+        let hadCategory = previousOrganization.assignments[id] != nil
+        if hadCategory { try assignCategory([id], to: nil) }
+        do { try writeIndex(values.filter { $0.id != id }) }
+        catch {
+            if hadCategory {
+                do { try writeOrganization(previousOrganization) }
+                catch { throw ReaderError.message("文档未移除，但分类恢复失败，请检查书库文件夹权限：\(error.localizedDescription)") }
+            }
+            throw error
+        }
         try FileManager.default.removeItem(at: folder(id))
     }
     func clearTranslations() throws {

@@ -12,18 +12,70 @@ extension ReaderModel {
         guard let library else { return }
         do {
             libraryBooks = try await library.list()
+            libraryOrganization = try await library.organization()
+            if case .category(let id) = libraryFilter, !libraryOrganization.categories.contains(where: { $0.id == id }) { libraryFilter = .all }
             for book in libraryBooks { libraryCovers[book.id] = await library.coverURL(book) }
         } catch { alert = error.localizedDescription; libraryStatus = "书库读取失败，已有文件保留" }
+    }
+    func matchingBooks(query: String, filter: LibraryFilter? = nil) -> [LibraryBook] {
+        let chosen = filter ?? libraryFilter
+        return libraryBooks.filter { book in
+            let category = libraryOrganization.assignments[book.id]
+            let matches: Bool
+            switch chosen {
+            case .all: matches = true
+            case .uncategorized: matches = category == nil
+            case .category(let id): matches = category == id
+            }
+            return matches && (query.isEmpty || book.title.localizedCaseInsensitiveContains(query))
+        }
+    }
+    var libraryFilterTitle: String {
+        switch libraryFilter {
+        case .all: return "全部"
+        case .uncategorized: return "未分类"
+        case .category(let id): return libraryOrganization.categories.first { $0.id == id }?.name ?? "分类"
+        }
+    }
+    func createLibraryCategory(_ name: String) async throws -> LibraryCategory {
+        guard let library else { throw ReaderError.message("书库未启用") }
+        let category = try await library.createCategory(name)
+        await refreshLibrary()
+        return category
+    }
+    func renameLibraryCategory(_ id: String, name: String) async throws {
+        guard let library else { return }
+        try await library.renameCategory(id, name: name)
+        await refreshLibrary()
+    }
+    func deleteLibraryCategory(_ id: String) async throws {
+        guard let library else { return }
+        try await library.deleteCategory(id)
+        if libraryFilter == .category(id) { libraryFilter = .all }
+        await refreshLibrary()
+    }
+    func assignLibraryCategory(_ ids: Set<String>, to categoryID: String?) async throws {
+        guard let library else { return }
+        try await library.assignCategory(ids, to: categoryID)
+        await refreshLibrary()
+        libraryStatus = "已更新 \(ids.count) 份文档的分类"
     }
     func importDocuments(_ urls: [URL], openFirst: Bool = false) {
         guard let library, !libraryBusy, !urls.isEmpty else { return }
         libraryBusy = true
+        let targetCategory: String?
+        if case .category(let id) = libraryFilter { targetCategory = id } else { targetCategory = nil }
         Task {
             var imported: [LibraryBook] = [], errors: [String] = []
             for (index, url) in urls.enumerated() {
                 libraryStatus = "正在导入 \(index + 1)/\(urls.count)：\(url.lastPathComponent)"
                 do {
-                    imported.append(try await library.importDocument(url))
+                    let book = try await library.importDocument(url)
+                    imported.append(book)
+                    if let targetCategory {
+                        do { try await library.assignCategory([book.id], to: targetCategory) }
+                        catch { errors.append("\(url.lastPathComponent) 已导入，但归类失败：\(error.localizedDescription)") }
+                    }
                     await refreshLibrary()
                 }
                 catch { errors.append("\(url.lastPathComponent)：\(error.localizedDescription)") }

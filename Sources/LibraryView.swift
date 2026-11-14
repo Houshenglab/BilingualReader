@@ -8,7 +8,7 @@ struct LibraryView: View {
     @State private var query = ""
     @State private var selectedID: String?
     @State private var removal: LibraryBook?
-    private var books: [LibraryBook] { model.libraryBooks.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) } }
+    private var books: [LibraryBook] { model.matchingBooks(query: query) }
     private var selectedIndex: Int { books.firstIndex { $0.id == selectedID } ?? 0 }
     private var selected: LibraryBook? { books.indices.contains(selectedIndex) ? books[selectedIndex] : nil }
     private var motion: Animation? { reduceMotion ? nil : .spring(response: 0.48, dampingFraction: 0.82) }
@@ -31,6 +31,8 @@ struct LibraryView: View {
                     .buttonStyle(.borderedProminent).disabled(model.libraryBusy)
             }.padding(24)
             Divider()
+            LibraryCategoryBar(model: model, visibleBooks: books)
+            Divider()
             if model.libraryBooks.isEmpty {
                 VStack(spacing: 20) {
                     Image(systemName: "books.vertical").font(.system(size: 64, weight: .ultraLight)).foregroundStyle(Color.accentColor)
@@ -40,7 +42,14 @@ struct LibraryView: View {
                     Text("可一次选择多份文件 · 原文件保留不变").font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if books.isEmpty {
-                VStack(spacing: 16) { Image(systemName: "magnifyingglass").font(.largeTitle); Text("没有找到这份文档"); Button("清除搜索") { query = "" } }
+                VStack(spacing: 16) {
+                    Image(systemName: query.isEmpty ? "folder" : "magnifyingglass").font(.largeTitle)
+                    Text(query.isEmpty ? "“\(model.libraryFilterTitle)”里还没有文档" : "这个分类中没有找到匹配文档")
+                    if query.isEmpty {
+                        Button("导入文档到这里") { model.chooseFile() }.buttonStyle(.borderedProminent).disabled(model.libraryBusy)
+                        Button("查看全部文档") { model.libraryFilter = .all }
+                    } else { Button("清除搜索") { query = "" } }
+                }
                     .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if display == "grid" {
                 ScrollView {
@@ -121,6 +130,7 @@ struct LibraryView: View {
         }
         .background(LinearGradient(colors: [Color(nsColor: .windowBackgroundColor), Color.accentColor.opacity(0.035)], startPoint: .top, endPoint: .bottom))
         .onChange(of: query) { _ in selectedID = nil }
+        .onChange(of: model.libraryFilter) { _ in selectedID = nil }
         .alert("从书架移除？", isPresented: Binding(get: { removal != nil }, set: { if !$0 { removal = nil } }), presenting: removal) { book in
             Button("取消", role: .cancel) { removal = nil }
             Button("移除", role: .destructive) { model.removeBook(book); removal = nil }
@@ -128,8 +138,26 @@ struct LibraryView: View {
     }
     @ViewBuilder private func bookMenu(_ book: LibraryBook) -> some View {
         Button("打开阅读") { model.openBook(book) }.disabled(model.libraryBusy)
+        Menu("移动到分类") {
+            Button { moveBook(book, to: nil) } label: {
+                if model.libraryOrganization.assignments[book.id] == nil { Label("未分类", systemImage: "checkmark") }
+                else { Text("未分类") }
+            }
+            ForEach(model.libraryOrganization.categories) { category in
+                Button { moveBook(book, to: category.id) } label: {
+                    if model.libraryOrganization.assignments[book.id] == category.id { Label(category.name, systemImage: "checkmark") }
+                    else { Text(category.name) }
+                }
+            }
+        }.disabled(model.libraryBusy)
         Divider()
         Button("从书架移除…", role: .destructive) { removal = book }.disabled(model.libraryBusy)
+    }
+    private func moveBook(_ book: LibraryBook, to categoryID: String?) {
+        Task {
+            do { try await model.assignLibraryCategory([book.id], to: categoryID) }
+            catch { model.alert = error.localizedDescription }
+        }
     }
     private func detail(_ book: LibraryBook) -> String {
         let pages = book.pageCount > 0 ? "第 \(book.page) / \(book.pageCount) 页" : book.format.uppercased()

@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "${0:A:h}"
 mkdir -p build dist/双语阅读.app/Contents/MacOS dist/双语阅读.app/Contents/Resources
-swiftc -parse-as-library -O -target arm64-apple-macosx13.0 -module-cache-path "$PWD/build/module-cache" Sources/Core.swift Sources/PDFLayout.swift Sources/PDFMinerEngine.swift Sources/LibraryStore.swift Sources/ReaderModel.swift Sources/ReaderLibrary.swift Sources/ShelfScroll.swift Sources/LibraryView.swift Sources/App.swift Sources/WordView.swift Sources/PDFReaderView.swift -o dist/双语阅读.app/Contents/MacOS/BilingualReader -framework SwiftUI -framework AppKit -framework PDFKit -framework CryptoKit -framework WebKit
+swiftc -parse-as-library -O -target arm64-apple-macosx13.0 -module-cache-path "$PWD/build/module-cache" Sources/Core.swift Sources/PDFLayout.swift Sources/PDFMinerEngine.swift Sources/LibraryStore.swift Sources/ReaderModel.swift Sources/ReaderLibrary.swift Sources/ShelfScroll.swift Sources/LibraryCategoryView.swift Sources/LibraryView.swift Sources/App.swift Sources/WordView.swift Sources/PDFReaderView.swift -o dist/双语阅读.app/Contents/MacOS/BilingualReader -framework SwiftUI -framework AppKit -framework PDFKit -framework CryptoKit -framework WebKit
 swiftc Tools/MakeIcon.swift -module-cache-path "$PWD/build/module-cache" -o build/make-icon -framework AppKit
 build/make-icon
 mkdir -p build/AppIcon.iconset
