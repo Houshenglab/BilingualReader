@@ -1,6 +1,32 @@
 import Foundation
 import PDFKit
 
+// Cancellation must reach the native process, not just discard its result.
+final class PDFExtractionCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+    var isCancelled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return cancelled
+    }
+    func start(_ process: Process) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard !cancelled else { throw CancellationError() }
+        try process.run()
+        self.process = process
+    }
+    func cancel() {
+        lock.lock(); defer { lock.unlock() }
+        cancelled = true
+        if let process, process.isRunning { process.terminate() }
+    }
+    func finish() {
+        lock.lock(); defer { lock.unlock() }
+        process = nil
+    }
+}
+
 enum PDFMinerEngine {
     struct TextLine: Decodable { let text: String; let bounds: [Double]; let fontSize: Double?; let fontName: String? }
     struct TextBox: Decodable { let lines: [TextLine]; let isArtwork: Bool? }
@@ -14,7 +40,7 @@ enum PDFMinerEngine {
         ].compactMap { $0 }
         return candidates.first { fm.isExecutableFile(atPath: $0.appendingPathComponent("python/bin/python3").path) }
     }
-    static func extract(_ url: URL) throws -> [Page] {
+    static func extract(_ url: URL, cancellation: PDFExtractionCancellation? = nil) throws -> [Page] {
         guard let resources = resourceDirectory() else {
             throw ReaderError.message("应用的 PDF 解析引擎缺失，请打开完整的新版 App。")
         }
@@ -24,13 +50,16 @@ enum PDFMinerEngine {
         let output = Pipe(), errors = Pipe()
         process.standardOutput = output
         process.standardError = errors
-        try process.run()
+        if let cancellation { try cancellation.start(process) }
+        else { try process.run() }
+        defer { cancellation?.finish() }
         let deadline = DispatchWorkItem { if process.isRunning { process.terminate() } }
         DispatchQueue.global().asyncAfter(deadline: .now() + 120, execute: deadline)
         defer { deadline.cancel() }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         let errorData = errors.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        if cancellation?.isCancelled == true { throw CancellationError() }
         guard process.terminationStatus == 0 else {
             let detail = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             throw ReaderError.message("PDF 版面分析未完成。" + (detail.isEmpty ? "请稍后重试或换一份文件。" : String(detail.prefix(350))))

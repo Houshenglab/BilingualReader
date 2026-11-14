@@ -16,8 +16,8 @@ import WebKit
         window.center();window.makeKeyAndOrderFront(nil)
         let output=URL(fileURLWithPath:FileManager.default.currentDirectoryPath).appendingPathComponent("build/bookshelf-previews")
         try! FileManager.default.createDirectory(at:output,withIntermediateDirectories:true)
-        func capture(_ name: String) async throws {
-            try await Task.sleep(nanoseconds: 800_000_000)
+        func capture(_ name: String, delay: UInt64 = 800_000_000) async throws {
+            try await Task.sleep(nanoseconds: delay)
             host.layoutSubtreeIfNeeded(); window.displayIfNeeded()
             let destination = output.appendingPathComponent(name + ".png")
             let shot = Process()
@@ -61,6 +61,9 @@ import WebKit
                 model.openBook(book)
                 for _ in 0..<400 where model.importing { try await Task.sleep(nanoseconds:50_000_000) }
                 guard model.currentBookID==book.id else { throw ReaderError.message("Open failed") }
+                try await capture("pdf-preparing", delay:350_000_000)
+                for _ in 0..<400 where !model.documentReady { try await Task.sleep(nanoseconds:50_000_000) }
+                guard model.documentReady else { throw ReaderError.message("Background PDF preparation failed") }
                 model.pdfVisiblePage=2;model.paragraphs[0].translation="持久保存测试";model.paragraphs[0].expanded=true
                 model.returnToLibrary();await model.flushLibrarySave()
                 model.openBook(book)

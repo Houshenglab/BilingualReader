@@ -85,7 +85,7 @@ struct ReaderView: View {
             if model.importing {
                 VStack(spacing: 16) { ProgressView(); Text("正在读取文档…").foregroundStyle(.secondary) }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if model.paragraphs.isEmpty { welcome }
+            } else if model.paragraphs.isEmpty && !(isPDF && model.pdfLayoutPending) { welcome }
             else {
                 HSplitView {
                     if let url = model.documentURL, url.pathExtension.lowercased() == "docx" {
@@ -143,14 +143,14 @@ struct ReaderView: View {
                 Text(model.documentTitle)
                     .font(.system(size: 14, weight: .semibold)).lineLimit(1).truncationMode(.middle)
                     .help(model.documentURL?.lastPathComponent ?? "双语阅读")
-                Text(model.documentURL == nil ? "本地文档 · 中英对照" : isPDF ? "PDF · \(model.pages.count) 页" : "\(model.documentURL!.pathExtension.uppercased()) · 段落对照")
+                Text(model.documentURL == nil ? "本地文档 · 中英对照" : isPDF ? (model.pdfLayoutPending ? "PDF · 原页阅读" : "PDF · \(model.pages.count) 页") : "\(model.documentURL!.pathExtension.uppercased()) · 段落对照")
                     .font(.caption).foregroundStyle(.secondary)
             }.frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
             if isPDF && !model.importing {
                 Picker("阅读方式", selection: $model.pdfMode) {
                     Text("原页阅读").tag(PDFReadingMode.original)
                     Text("段落对照").tag(PDFReadingMode.paragraphs)
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 192)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 192).disabled(model.pdfLayoutPending)
                     .onChange(of: model.pdfMode) { mode in
                         if mode == .paragraphs, let id = model.selectedPDFParagraph,
                            model.paragraphs.indices.contains(id), ["metadata", "figure"].contains(model.paragraphs[id].kind) { model.showPDFDetails = true }

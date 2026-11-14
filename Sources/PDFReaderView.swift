@@ -121,7 +121,20 @@ struct PDFTranslationPanel: View {
                     .disabled(selected == nil || selected?.id == model.readingParagraphs.last?.id)
             }.buttonStyle(.borderless).padding(24)
             Divider()
-            if let paragraph = selected {
+            if model.pdfLayoutPending {
+                VStack(alignment: .leading, spacing: 16) {
+                    if model.preparingPDF {
+                        ProgressView().controlSize(.small)
+                        Text("正在准备段落翻译").font(.title3)
+                        Text("你可以先阅读、翻动左侧原页。完成后即可点击英文段落翻译。").foregroundStyle(.secondary)
+                    } else {
+                        Image(systemName: "doc.text.magnifyingglass").font(.title)
+                        Text("段落分析未完成").font(.title3)
+                        Text(model.pdfPreparationError ?? "请重试段落分析，原页仍可阅读。").foregroundStyle(.secondary)
+                        Button("重新分析") { model.preparePDFLayout() }.buttonStyle(.borderedProminent)
+                    }
+                }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else if let paragraph = selected {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         HStack {

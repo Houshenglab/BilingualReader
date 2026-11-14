@@ -16,6 +16,7 @@ struct LibraryBook: Codable, Identifiable, Equatable {
 }
 struct ReadingSession: Codable {
     var paragraphs: [ReadingParagraph]
+    var layoutPending: Bool? = nil
     var page: Int = 1
     var paragraphID: Int? = nil
     var mode: String = PDFReadingModeValue.original
@@ -60,30 +61,48 @@ actor LibraryStore {
         guard ["pdf", "docx", "txt"].contains(ext) else { throw ReaderError.message("请选择 PDF、DOCX 或 TXT 文件") }
         let access = source.startAccessingSecurityScopedResource()
         defer { if access { source.stopAccessingSecurityScopedResource() } }
-        let handle = try FileHandle(forReadingFrom: source)
-        defer { try? handle.close() }
+        // Read remote/cloud files once: the bytes copied are also the bytes hashed.
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let staging = root.appendingPathComponent(".import-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+        let name = "document." + ext
+        let copy = staging.appendingPathComponent(name)
+        FileManager.default.createFile(atPath: copy.path, contents: nil)
+        let input = try FileHandle(forReadingFrom: source)
+        defer { try? input.close() }
+        let output = try FileHandle(forWritingTo: copy)
+        defer { try? output.close() }
         var hasher = SHA256()
-        while let data = try handle.read(upToCount: 1024 * 1024), !data.isEmpty { hasher.update(data: data) }
+        while let data = try input.read(upToCount: 1024 * 1024), !data.isEmpty {
+            try output.write(contentsOf: data)
+            hasher.update(data: data)
+        }
+        try output.close()
         let id = hasher.finalize().map { String(format: "%02x", $0) }.joined()
         if let existing = values.first(where: { $0.id == id }) { return existing }
         let dir = folder(id)
-        // A failed previous import is not in the index; retain it rather than overwrite it.
         guard !FileManager.default.fileExists(atPath: dir.path) else { throw ReaderError.message("书库中有未完成的同名记录，请检查书库文件夹后重试") }
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        do {
-            let name = "document." + ext
-            let copy = dir.appendingPathComponent(name)
-            try FileManager.default.copyItem(at: source, to: copy)
-            let paragraphs = try DocumentLoader.load(copy)
-            guard !paragraphs.isEmpty else { throw ReaderError.message("文档没有可读取的文字") }
-            let pdf = ext == "pdf" ? PDFDocument(url: copy) : nil
-            if let first = pdf?.page(at: 0) {
-                let image = first.thumbnail(of: NSSize(width: 420, height: 580), for: .cropBox)
-                if let tiff = image.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) { try png.write(to: dir.appendingPathComponent("cover.png"), options: .atomic) }
+        var pdf: PDFDocument?
+        let paragraphs: [ReadingParagraph]
+        if ext == "pdf" {
+            guard let document = PDFDocument(url: copy), document.pageCount > 0 else { throw ReaderError.message("无法打开这份 PDF。") }
+            guard !document.isLocked else { throw ReaderError.message("这份 PDF 有密码保护，请先解锁。") }
+            pdf = document
+            paragraphs = []
+        } else { paragraphs = try DocumentLoader.load(copy) }
+        if let first = pdf?.page(at: 0) {
+            let image = first.thumbnail(of: NSSize(width: 420, height: 580), for: .cropBox)
+            if let tiff = image.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                try png.write(to: staging.appendingPathComponent("cover.png"), options: .atomic)
             }
-            let book = LibraryBook(id: id, title: source.deletingPathExtension().lastPathComponent, fileName: name,
-                                   format: ext, addedAt: Date(), lastOpened: Date(), pageCount: pdf?.pageCount ?? 0, translatedCount: 0, page: 1)
-            try JSONEncoder().encode(ReadingSession(paragraphs: paragraphs)).write(to: dir.appendingPathComponent("session.json"), options: .atomic)
+        }
+        let book = LibraryBook(id: id, title: source.deletingPathExtension().lastPathComponent, fileName: name,
+                               format: ext, addedAt: Date(), lastOpened: Date(), pageCount: pdf?.pageCount ?? 0, translatedCount: 0, page: 1)
+        try JSONEncoder().encode(ReadingSession(paragraphs: paragraphs, layoutPending: ext == "pdf" ? true : nil))
+            .write(to: staging.appendingPathComponent("session.json"), options: .atomic)
+        try FileManager.default.moveItem(at: staging, to: dir)
+        do {
             values.append(book); try writeIndex(values)
             return book
         } catch { try? FileManager.default.removeItem(at: dir); throw error }

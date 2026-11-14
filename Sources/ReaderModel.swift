@@ -41,6 +41,10 @@ final class ReaderModel: ObservableObject {
     @Published var libraryStatus = ""
     @Published var currentBookID: String?
     @Published var readingParagraphID: Int? { didSet { scheduleLibrarySave() } }
+    @Published var pdfLayoutPending = false
+    @Published var preparingPDF = false
+    @Published var pdfPreparationError: String?
+    var pdfPreparationTask: Task<Void, Never>?
     var pendingWordSession: ReadingSession?
     var saveTask: Task<Void, Never>?
     var saveDebounce: Task<Void, Never>?

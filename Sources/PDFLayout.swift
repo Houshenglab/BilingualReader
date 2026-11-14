@@ -30,8 +30,8 @@ enum PDFLayout {
     static func endsSentence(_ text: String) -> Bool {
         text.range(of: #"[.!?。！？][\"”’')\]\d,–−]*$"#, options: .regularExpression) != nil
     }
-    static func document(_ pdf: PDFDocument, sourceURL: URL) throws -> [ReadingParagraph] {
-        let pages = try PDFMinerEngine.extract(sourceURL)
+    static func document(_ pdf: PDFDocument, sourceURL: URL, cancellation: PDFExtractionCancellation? = nil) throws -> [ReadingParagraph] {
+        let pages = try PDFMinerEngine.extract(sourceURL, cancellation: cancellation)
         // Repeated publisher furniture may sit well below the top margin when
         // the manuscript is embedded in a smaller page-sized Form XObject.
         var headerPages: [String: Set<Int>] = [:]

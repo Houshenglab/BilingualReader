@@ -59,7 +59,7 @@ struct LibraryView: View {
             } else {
                 VStack(spacing: 12) {
                     HStack {
-                        Text("继续阅读").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                        Text("继续阅读 · 双指左右滑动翻书架").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                         Spacer()
                         Text("\(selectedIndex + 1) / \(books.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     }.padding(.horizontal, 36).padding(.top, 28)
@@ -88,6 +88,9 @@ struct LibraryView: View {
                             }
                         }.frame(maxWidth: .infinity, maxHeight: .infinity)
                             .contentShape(Rectangle())
+                            .background(ShelfScrollInput { distance in
+                                if !model.libraryBusy { move(distance) }
+                            })
                             .simultaneousGesture(DragGesture(minimumDistance: 25).onEnded { value in
                                 if abs(value.translation.width) > abs(value.translation.height) { move(value.translation.width < 0 ? 1 : -1) }
                             })

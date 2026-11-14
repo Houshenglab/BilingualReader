@@ -1,4 +1,5 @@
 import Foundation
+import PDFKit
 @main struct LibraryChecks {
  static func check(_ value: Bool, _ message: String = "Library check failed") { if !value { fatalError(message) } }
  static func main() async throws {
@@ -35,6 +36,13 @@ import Foundation
   let bad=root.appendingPathComponent("bad.pdf");try Data("not a pdf".utf8).write(to:bad)
   do { _=try await store.importDocument(bad);fatalError("Invalid PDF was imported") } catch {}
   check(try await store.list().count==1)
+  let lockedURL=root.appendingPathComponent("locked.pdf")
+  let lockedPDF=PDFDocument(url:URL(fileURLWithPath:"fixtures/example.pdf"))!
+  check(lockedPDF.write(to:lockedURL,withOptions:[.userPasswordOption:"reader-test",.ownerPasswordOption:"owner-test"]))
+  do { _=try await store.importDocument(lockedURL);fatalError("Locked PDF was imported") } catch {}
+  check(try await store.list().count==1, "Locked PDF must not add a library record")
+  let folders=try FileManager.default.contentsOfDirectory(atPath:root.appendingPathComponent("library").path)
+  check(!folders.contains{$0.hasPrefix(".import-")}, "Rejected/duplicate imports must not leave staging folders")
   let index=root.appendingPathComponent("library/index.json")
   try Data("broken".utf8).write(to:index)
   do { _=try await LibraryStore(root:root.appendingPathComponent("library")).list();fatalError("Corrupt index silently reset") } catch {}

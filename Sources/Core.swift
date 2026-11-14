@@ -26,13 +26,13 @@ enum ReaderError: LocalizedError {
 
 // Paragraph extraction is local. The source file is never rewritten.
 enum DocumentLoader {
-    static func load(_ url: URL) throws -> [ReadingParagraph] {
+    static func load(_ url: URL, cancellation: PDFExtractionCancellation? = nil) throws -> [ReadingParagraph] {
         let ext = url.pathExtension.lowercased()
         var blocks: [(String, Int?)] = []
         if ext == "pdf" {
             guard let pdf = PDFDocument(url: url) else { throw ReaderError.message("无法打开这份 PDF。") }
             guard !pdf.isLocked else { throw ReaderError.message("这份 PDF 有密码保护，请先解锁。") }
-            let paragraphs = try PDFLayout.document(pdf, sourceURL: url)
+            let paragraphs = try PDFLayout.document(pdf, sourceURL: url, cancellation: cancellation)
             guard !paragraphs.isEmpty else { throw ReaderError.message("没有找到可读取的文字。扫描版 PDF 暂不支持，请先进行 OCR。") }
             return paragraphs
         } else if ext == "docx" {
