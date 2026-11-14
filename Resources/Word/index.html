@@ -43,5 +43,19 @@ function updateReader(states,auto){
  const was=automatic;automatic=auto;
  if(automatic&&!was)for(const id of visible){if(/[A-Za-z]{3}/.test(nodes[id].innerText))post({kind:'visible',id})}
 }
+let positionReady=false, positionTimer;
+function reportReadingPosition(){
+ if(!positionReady||!nodes.length)return;
+ const id=nodes.findIndex(p=>p.getBoundingClientRect().bottom>0);
+ if(id>=0)post({kind:'position',id});
+}
+function restoreReadingPosition(id){
+ positionReady=false;
+ requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  if(nodes[id])nodes[id].scrollIntoView({block:'start',behavior:'auto'});
+  positionReady=true;
+ }));
+}
+window.addEventListener('scroll',()=>{clearTimeout(positionTimer);positionTimer=setTimeout(reportReadingPosition,120)},{passive:true});
 function setZoom(value){document.getElementById('document').style.zoom=value;}
 </script></body></html>

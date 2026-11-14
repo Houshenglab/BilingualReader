@@ -11,7 +11,7 @@ enum PDFReadingMode: String, CaseIterable, Identifiable {
 
 @MainActor
 final class ReaderModel: ObservableObject {
-    @Published var paragraphs: [ReadingParagraph] = []
+    @Published var paragraphs: [ReadingParagraph] = [] { didSet { scheduleLibrarySave() } }
     @Published var documentURL: URL?
     @Published var documentID = UUID()
     @Published var engine: TranslationEngine = .google
@@ -21,26 +21,44 @@ final class ReaderModel: ObservableObject {
     @Published var isPaused = false
     @Published private(set) var pendingCount = 0
     @Published var autoTranslate = false
-    @Published var pdfMode: PDFReadingMode = .original
+    @Published var pdfMode: PDFReadingMode = .original { didSet { scheduleLibrarySave() } }
     @Published var selectedPDFParagraph: Int?
     @Published var showPDFDetails = false
-    @Published var pdfVisiblePage = 1
+    @Published var pdfVisiblePage = 1 { didSet { scheduleLibrarySave() } }
     @Published var pdfMergeBackup: (paragraphs: [ReadingParagraph], selected: Int)?
-    @Published var fontSize: Double = 20
+    @Published var fontSize: Double = 20 { didSet { scheduleLibrarySave() } }
     @Published var alert: String?
     @Published var showingSettings = false
     @Published var cacheCount = 0
     @Published var cacheBytes: Int64 = 0
     @Published var clearingCache = false
     let translator: WebTranslator
-    init(translator: WebTranslator = WebTranslator()) { self.translator = translator }
+    let library: LibraryStore?
+    @Published var libraryBooks: [LibraryBook] = []
+    @Published var libraryCovers: [String: URL] = [:]
+    @Published var showingLibrary = true
+    @Published var libraryBusy = false
+    @Published var libraryStatus = ""
+    @Published var currentBookID: String?
+    @Published var readingParagraphID: Int? { didSet { scheduleLibrarySave() } }
+    var pendingWordSession: ReadingSession?
+    var saveTask: Task<Void, Never>?
+    var saveDebounce: Task<Void, Never>?
+    var restoringSession = false
+    init(translator: WebTranslator = WebTranslator(), library: LibraryStore? = nil) {
+        self.translator = translator; self.library = library
+        if library != nil {
+            if let saved = UserDefaults.standard.string(forKey: "libraryEngine"), let engine = TranslationEngine(rawValue: saved) { self.engine = engine }
+            Task { await refreshLibrary() }
+        }
+    }
     private var queue: [Int] = []
     private var activeID: Int?
     private var automaticBeforePause = false
     private var transientFailures: [Int] = []
     private var worker: Task<Void, Never>?
     private var generation = UUID()
-    private var importGeneration = UUID()
+    var importGeneration = UUID()
     private var openPanel: NSOpenPanel?
     var busy: Bool { worker != nil && !isPaused }
     var failedCount: Int { paragraphs.filter { $0.error != nil }.count }
@@ -59,19 +77,21 @@ final class ReaderModel: ObservableObject {
         openPanel = nil
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.pdf, UTType(filenameExtension: "docx")!, .plainText]
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = library != nil
         panel.canChooseDirectories = false
         openPanel = panel
         let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard let self, self.openPanel === panel else { return }
             self.openPanel = nil
-            if response == .OK, let url = panel.url { self.open(url) }
+            if response == .OK { if self.library != nil { self.importDocuments(panel.urls) } else if let url = panel.url { self.open(url) } }
         }
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
             panel.beginSheetModal(for: window, completionHandler: completion)
         } else { panel.begin(completionHandler: completion) }
     }
     func open(_ url: URL) {
+        if library != nil { importDocuments([url], openFirst: true); return }
+        showingLibrary = false
         stop()
         generation = UUID()
         importGeneration = UUID()
@@ -108,6 +128,7 @@ final class ReaderModel: ObservableObject {
     func selectPDFParagraph(_ id: Int) {
         guard paragraphs.indices.contains(id) else { return }
         selectedPDFParagraph = id
+        readingParagraphID = id
         enqueue(id)
     }
     func mergePDFParagraph(_ direction: Int) {
@@ -144,8 +165,14 @@ final class ReaderModel: ObservableObject {
     func acceptWordParagraphs(_ texts: [String], url: URL) {
         guard documentURL == url else { return }
         stop()
-        paragraphs = texts.enumerated().map { ReadingParagraph(id: $0.offset, text: $0.element, page: nil) }
+        let saved = pendingWordSession?.paragraphs ?? []
+        paragraphs = texts.enumerated().map { index, text in
+            if let old = saved.first(where: { $0.id == index && $0.text == text }) { return old }
+            return ReadingParagraph(id: index, text: text, page: nil)
+        }
+        pendingWordSession = nil
         documentReady = true
+        scheduleLibrarySave()
     }
     func enqueueAutomatically(_ id: Int) {
         guard !isPaused, paragraphs.indices.contains(id), paragraphs[id].error == nil else { return }
@@ -192,6 +219,7 @@ final class ReaderModel: ObservableObject {
                     paragraphs[id].loading = false
                     paragraphs[id].activity = nil
                     transientFailures.removeAll()
+                    saveReadingSession()
                 } catch {
                     guard !Task.isCancelled && generation == version else { return }
                     paragraphs[id].error = error.localizedDescription
@@ -268,6 +296,7 @@ final class ReaderModel: ObservableObject {
         status = "翻译已停止，已完成的译文保留"
     }
     func changeEngine() {
+        if library != nil { UserDefaults.standard.set(engine.rawValue, forKey: "libraryEngine") }
         stop()
         var updated = paragraphs
         for index in updated.indices {
@@ -295,6 +324,8 @@ final class ReaderModel: ObservableObject {
         Task {
             do {
                 try await translator.clearCache()
+                try await library?.clearTranslations()
+                pendingWordSession = nil
                 var updated = paragraphs
                 for index in updated.indices {
                     updated[index].translation = nil
@@ -302,6 +333,8 @@ final class ReaderModel: ObservableObject {
                     updated[index].expanded = false
                 }
                 paragraphs = updated
+                saveReadingSession()
+                await refreshLibrary()
                 status = "翻译缓存已清理 · 点击段落可重新翻译"
             } catch { alert = "清理缓存失败：" + error.localizedDescription }
             await refreshCacheInfo()

@@ -53,7 +53,9 @@ struct WordView: NSViewRepresentable {
                 ready = true
                 model.status = "Word 原文排版 · \(payload["tables"] ?? 0) 个表格 · 点击英文段落展开中文"
                 synchronize()
+                view?.callAsyncJavaScript("restoreReadingPosition(id);", arguments: ["id": model.readingParagraphID ?? 0], in: nil, in: .page, completionHandler: nil)
             } else if ready, let id = payload["id"] as? Int {
+                if kind == "position", model.paragraphs.indices.contains(id) { model.readingParagraphID = id }
                 if kind == "toggle" { model.toggle(id) }
                 if kind == "retry" { model.enqueue(id) }
                 if kind == "resume" { model.resume() }

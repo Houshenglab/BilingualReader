@@ -72,9 +72,14 @@ struct ParagraphView: View {
 
 struct ReaderView: View {
     @ObservedObject var model: ReaderModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var restoringAnchor = false
     private var isPDF: Bool { model.documentURL?.pathExtension.lowercased() == "pdf" }
     var body: some View {
         VStack(spacing: 0) {
+            if model.library != nil && model.showingLibrary && !model.importing {
+                LibraryView(model: model).transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.97)))
+            } else {
             toolbar
             Divider()
             if model.importing {
@@ -93,7 +98,11 @@ struct ReaderView: View {
             }
             Divider()
             footer
+            }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.showingLibrary)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in model.saveReadingSession() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in model.saveReadingSession() }
         .frame(minWidth: 900, minHeight: 600)
         .background(Color(nsColor: .textBackgroundColor))
         .accentColor(Color(red: 0.22, green: 0.40, blue: 0.66))
@@ -103,10 +112,20 @@ struct ReaderView: View {
             Button("好", role: .cancel) { model.alert = nil }
         } message: { Text(model.alert ?? "") }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            guard let first = providers.first else { return false }
-            first.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) { Task { @MainActor in model.open(url) } }
-                else if let url = item as? URL { Task { @MainActor in model.open(url) } }
+            guard !providers.isEmpty else { return false }
+            Task { @MainActor in
+                var urls: [URL] = []
+                for provider in providers {
+                    let url: URL? = await withCheckedContinuation { continuation in
+                        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                            if let data = item as? Data { continuation.resume(returning: URL(dataRepresentation: data, relativeTo: nil)) }
+                            else { continuation.resume(returning: item as? URL) }
+                        }
+                    }
+                    if let url { urls.append(url) }
+                }
+                if model.library != nil { model.importDocuments(urls) }
+                else if let first = urls.first { model.open(first) }
             }
             return true
         }
@@ -114,10 +133,14 @@ struct ReaderView: View {
     }
     private var toolbar: some View {
         HStack(spacing: 16) {
-            Button { model.chooseFile() } label: { Image(systemName: "sidebar.left") }
+            if model.library != nil {
+                Button { model.returnToLibrary() } label: { Label("书架", systemImage: "chevron.left") }
+                    .help("返回书架，保存阅读位置")
+            }
+            Button { model.chooseFile() } label: { Image(systemName: "plus") }
                 .help("打开或更换文档（⌘O）").accessibilityLabel("打开文档")
             VStack(alignment: .leading, spacing: 4) {
-                Text(model.documentURL?.deletingPathExtension().lastPathComponent ?? "双语阅读")
+                Text(model.documentTitle)
                     .font(.system(size: 14, weight: .semibold)).lineLimit(1).truncationMode(.middle)
                     .help(model.documentURL?.lastPathComponent ?? "双语阅读")
                 Text(model.documentURL == nil ? "本地文档 · 中英对照" : isPDF ? "PDF · \(model.pages.count) 页" : "\(model.documentURL!.pathExtension.uppercased()) · 段落对照")
@@ -234,12 +257,22 @@ struct ReaderView: View {
                                 }.padding(.top, 24)
                             }
                             ParagraphView(model: model, paragraph: paragraph).id(paragraph.id)
+                                .background(GeometryReader { geometry in Color.clear.preference(key: ReadingPositionKey.self, value: [paragraph.id: geometry.frame(in: .named("readingScroll")).minY]) })
                             Divider().opacity(0.5)
                         }
                     }.frame(maxWidth: 760).padding(.horizontal, 40).padding(.vertical, 24).frame(maxWidth: .infinity)
-                }.id(model.documentID)
+                }.coordinateSpace(name: "readingScroll").id(model.documentID)
+                .onPreferenceChange(ReadingPositionKey.self) { positions in
+                    guard !restoringAnchor, let top = positions.filter({ $0.value >= -30 }).min(by: { $0.value < $1.value }) else { return }
+                    model.readingParagraphID = top.key
+                }
                 .onAppear {
-                    if isPDF, let id = model.selectedPDFParagraph { DispatchQueue.main.async { proxy.scrollTo(id, anchor: .top) } }
+                    restoringAnchor = true
+                    let target = model.selectedPDFParagraph ?? model.readingParagraphID
+                    DispatchQueue.main.async {
+                        if let target { proxy.scrollTo(target, anchor: .top) }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { restoringAnchor = false }
+                    }
                 }
             }
         }
@@ -347,19 +380,24 @@ struct TranslationSettings: View {
 #if !READER_PREVIEW
 @main
 struct BilingualReaderApp: App {
-    @StateObject private var model = ReaderModel()
+    @NSApplicationDelegateAdaptor(ReaderAppDelegate.self) private var delegate
+    @StateObject private var model = ReaderModel(library: LibraryStore())
     var body: some Scene {
         WindowGroup("双语阅读") {
             ReaderView(model: model)
                 .onAppear {
                     if model.documentURL == nil, let path = CommandLine.arguments.dropFirst().first, !path.hasPrefix("-") { model.open(URL(fileURLWithPath: path)) }
+                    delegate.model = model
                     NSApp.applicationIconImage = ReaderBrand.icon
                     NSApp.activate(ignoringOtherApps: true)
                 }
         }
         .defaultSize(width: 1100, height: 800)
         .commands {
-            CommandGroup(replacing: .newItem) { Button("打开文档…") { model.chooseFile() }.keyboardShortcut("o") }
+            CommandGroup(replacing: .newItem) {
+                Button("导入文档…") { model.chooseFile() }.keyboardShortcut("o")
+                Button("返回书架") { model.returnToLibrary() }.keyboardShortcut("l", modifiers: [.command, .shift])
+            }
             CommandMenu("阅读") {
                 Button("导出中英对照…") { model.export() }.disabled(model.paragraphs.isEmpty)
                 Button("收起全部中文") { model.collapseAll() }
@@ -373,3 +411,16 @@ struct BilingualReaderApp: App {
 }
 
 #endif
+
+struct ReadingPositionKey: PreferenceKey {
+    static let defaultValue: [Int: CGFloat] = [:]
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) { value.merge(nextValue(), uniquingKeysWith: { _, new in new }) }
+}
+@MainActor final class ReaderAppDelegate: NSObject, NSApplicationDelegate {
+    weak var model: ReaderModel?
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model else { return .terminateNow }
+        Task { await model.flushLibrarySave(); sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
+    }
+}

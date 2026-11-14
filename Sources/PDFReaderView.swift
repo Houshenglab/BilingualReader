@@ -28,7 +28,13 @@ struct LinkedPDF: NSViewRepresentable {
                 coordinator.model.selectPDFParagraph(match.id)
             }
         }
-        context.coordinator.observe(view)
+        let restoredPage = model.pdfVisiblePage
+        let token = model.documentID
+        DispatchQueue.main.async {
+            guard context.coordinator.model.documentID == token else { return }
+            if let page = view.document?.page(at: restoredPage - 1) { view.go(to: page) }
+            context.coordinator.observe(view)
+        }
         return view
     }
     func updateNSView(_ view: ClickablePDFView, context: Context) {
@@ -57,12 +63,13 @@ struct LinkedPDF: NSViewRepresentable {
     }
     final class Coordinator: NSObject {
         let model: ReaderModel
+        let documentID: UUID
         var lastSelection: Int?
         var lastSourceCount = 0
         var token: NSObjectProtocol?
         var mouseMonitor: Any?
         var mouseDownPoint: NSPoint?
-        init(_ model: ReaderModel) { self.model = model }
+        @MainActor init(_ model: ReaderModel) { self.model = model; self.documentID = model.documentID }
         func observe(_ view: ClickablePDFView) {
             mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self, weak view] event in
                 guard let self, let view, event.window === view.window else { return event }
@@ -79,7 +86,10 @@ struct LinkedPDF: NSViewRepresentable {
             }
             token = NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: view, queue: .main) { [weak self, weak view] _ in
                 guard let self, let doc = view?.document, let page = view?.currentPage else { return }
-                Task { @MainActor in self.model.pdfVisiblePage = doc.index(for: page) + 1 }
+                Task { @MainActor in
+                    guard self.model.documentID == self.documentID else { return }
+                    self.model.pdfVisiblePage = doc.index(for: page) + 1
+                }
             }
         }
         deinit {
