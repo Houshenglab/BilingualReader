@@ -165,7 +165,7 @@ final class ReaderModel: ObservableObject {
     func acceptWordParagraphs(_ texts: [String], url: URL) {
         guard documentURL == url else { return }
         stop()
-        let saved = pendingWordSession?.paragraphs ?? []
+        let saved = pendingWordSession?.engine == engine.rawValue ? pendingWordSession?.paragraphs ?? [] : []
         paragraphs = texts.enumerated().map { index, text in
             if let old = saved.first(where: { $0.id == index && $0.text == text }) { return old }
             return ReadingParagraph(id: index, text: text, page: nil)
@@ -296,6 +296,7 @@ final class ReaderModel: ObservableObject {
         status = "翻译已停止，已完成的译文保留"
     }
     func changeEngine() {
+        pendingWordSession = nil
         if library != nil { UserDefaults.standard.set(engine.rawValue, forKey: "libraryEngine") }
         stop()
         var updated = paragraphs

@@ -32,8 +32,11 @@ struct LinkedPDF: NSViewRepresentable {
         let token = model.documentID
         DispatchQueue.main.async {
             guard context.coordinator.model.documentID == token else { return }
-            if let page = view.document?.page(at: restoredPage - 1) { view.go(to: page) }
+            if context.coordinator.model.selectedPDFParagraph == nil, let page = view.document?.page(at: restoredPage - 1) { view.go(to: page) }
             context.coordinator.observe(view)
+            if let doc = view.document, let page = view.currentPage {
+                context.coordinator.model.pdfVisiblePage = doc.index(for: page) + 1
+            }
         }
         return view
     }

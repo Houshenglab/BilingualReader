@@ -257,14 +257,14 @@ struct ReaderView: View {
                                 }.padding(.top, 24)
                             }
                             ParagraphView(model: model, paragraph: paragraph).id(paragraph.id)
-                                .background(GeometryReader { geometry in Color.clear.preference(key: ReadingPositionKey.self, value: [paragraph.id: geometry.frame(in: .named("readingScroll")).minY]) })
+                                .background(GeometryReader { geometry in Color.clear.preference(key: ReadingPositionKey.self, value: [paragraph.id: geometry.frame(in: .named("readingScroll"))]) })
                             Divider().opacity(0.5)
                         }
                     }.frame(maxWidth: 760).padding(.horizontal, 40).padding(.vertical, 24).frame(maxWidth: .infinity)
                 }.coordinateSpace(name: "readingScroll").id(model.documentID)
                 .onPreferenceChange(ReadingPositionKey.self) { positions in
-                    guard !restoringAnchor, let top = positions.filter({ $0.value >= -30 }).min(by: { $0.value < $1.value }) else { return }
-                    model.readingParagraphID = top.key
+                    guard !restoringAnchor, let top = ReaderModel.visibleParagraph(in: positions) else { return }
+                    model.readingParagraphID = top
                 }
                 .onAppear {
                     restoringAnchor = true
@@ -413,8 +413,8 @@ struct BilingualReaderApp: App {
 #endif
 
 struct ReadingPositionKey: PreferenceKey {
-    static let defaultValue: [Int: CGFloat] = [:]
-    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) { value.merge(nextValue(), uniquingKeysWith: { _, new in new }) }
+    static let defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) { value.merge(nextValue(), uniquingKeysWith: { _, new in new }) }
 }
 @MainActor final class ReaderAppDelegate: NSObject, NSApplicationDelegate {
     weak var model: ReaderModel?

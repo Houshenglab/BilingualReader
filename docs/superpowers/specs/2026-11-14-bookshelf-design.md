@@ -1,0 +1,8 @@
+# Persistent bookshelf
+Approved direction: user requested direct implementation of the recommended 3D shelf plus searchable grid, local document copies, cover thumbnails, reading-position and completed-translation restoration. Native macOS 13+, SwiftUI/PDFKit/WKWebView. No new dependencies or cloud storage.
+
+Launch into a library. Toolbar: library title/count, search, shelf/grid switch and batch import. Shelf: perspective covers, selected cover centered, side covers angled, arrows/drag to browse, selected title/progress and continue button. Grid: adaptive covers for larger collections. PDF covers use first-page thumbnail; Word/TXT use typographic covers. Opening/return transitions respect Reduce Motion.
+
+Copy imports into Application Support/BilingualReader/Library, keyed by content hash to deduplicate. Originals remain untouched. Save book metadata and per-book reading sessions atomically. Reopen managed copies even if originals move. Persist PDF page, paragraph anchor, mode, font and paragraphs including merges/translations; Word restores after DOM readiness. Completed translations belong to their engine. Cache clearing clears saved translations too. No automatic resumption of network tasks after restart.
+
+Import validates files before adding; partial batch failures keep successful books and report errors. Remove requires confirmation and removes only managed copy/session/cover. Corrupt indexes must show an error and never be silently overwritten. Empty/search-empty/error states are explicit. Keep old 0.6.1 app and deliver 0.7.0 locally; publishing is outside this change.

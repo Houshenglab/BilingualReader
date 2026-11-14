@@ -1,6 +1,9 @@
 import Foundation
 
 extension ReaderModel {
+    static func visibleParagraph(in frames: [Int: CGRect]) -> Int? {
+        frames.filter { $0.value.maxY > 0 }.min { $0.value.minY < $1.value.minY }?.key
+    }
     var documentTitle: String {
         libraryBooks.first(where: { $0.id == currentBookID })?.title
             ?? documentURL?.deletingPathExtension().lastPathComponent ?? "双语阅读"

@@ -2,7 +2,7 @@
 
 macOS 本地 PDF、Word 和 TXT 双语阅读器。PDF 支持原页与译文对照、整段中英对照；Word 在原段落下方显示中文，并保留表格、图片和公式。
 
-[下载最新版](https://github.com/hswang2001123-cmd/BilingualReader/releases/latest) · [版本记录](CHANGELOG.md) · [第三方许可](THIRD-PARTY-NOTICES.md)
+[下载最新版](https://github.com/Houshenglab/BilingualReader/releases/latest) · [版本记录](CHANGELOG.md) · [第三方许可](THIRD-PARTY-NOTICES.md)
 
 ## 下载与安装
 
@@ -12,6 +12,17 @@ macOS 本地 PDF、Word 和 TXT 双语阅读器。PDF 支持原页与译文对�
 
 支持 **Apple Silicon（M 系列芯片）和 macOS 13 及以上**。目前未提供 Intel 版。
 应用使用本地临时签名，尚未经过 Apple 公证。确认来自本仓库后，可通过 macOS「系统设置 → 隐私与安全性」允许打开。下载页提供 SHA-256 校验文件。
+
+## 本机书架（0.7.0）
+
+- 启动进入「我的书架」，可在立体封面与网格之间切换，并按文档名搜索。
+- 批量导入 PDF、DOCX、TXT，或将多份文件拖入窗口。相同内容自动去重。
+- PDF 使用首页封面，Word/TXT 使用标题封面；点击两侧封面或左右滑动切换，点击中间封面开始阅读。
+- 自动保存 PDF 页码、段落位置、字号、阅读模式及已完成译文。返回书架后可换一本继续读。
+- 文档副本和记录保存在 `~/Library/Application Support/BilingualReader/Library`，原文件移动后仍可打开副本。
+- 右键封面选择「从书架移除」仅删除应用管理的副本与该文档记录，不删除原文件。
+- 清理翻译缓存也会清除书库保存的译文；已导入的文档和阅读位置保留。
+- 动画遵循系统「减少动态效果」设置。
 
 ## 阅读与翻译
 
@@ -63,6 +74,8 @@ zsh build.sh
 
 ```sh
 zsh check.sh
+zsh check-library.sh
+zsh check-library-model.sh
 zsh check-layout.sh
 zsh check-reliability.sh
 zsh check-reliability.sh --review

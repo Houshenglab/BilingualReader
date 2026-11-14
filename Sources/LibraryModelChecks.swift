@@ -1,6 +1,7 @@
 import Foundation
 @main struct LibraryModelChecks {
  @MainActor static func main() async throws {
+  precondition(ReaderModel.visibleParagraph(in:[0:CGRect(x:0,y:-100,width:500,height:1000),1:CGRect(x:0,y:900,width:500,height:100)])==0, "Keep the still-visible long paragraph")
   let root=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
   defer { try? FileManager.default.removeItem(at:root) }
   try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
@@ -29,6 +30,20 @@ import Foundation
   await next.flushLibrarySave()
   let state=try await store.session(book.id)!
   precondition(state.paragraphs.allSatisfy{$0.translation==nil})
+  let oldEngine=UserDefaults.standard.string(forKey:"libraryEngine")
+  defer { if let oldEngine {UserDefaults.standard.set(oldEngine,forKey:"libraryEngine")}else{UserDefaults.standard.removeObject(forKey:"libraryEngine")} }
+  let word=try await store.importDocument(URL(fileURLWithPath:FileManager.default.currentDirectoryPath).appendingPathComponent("fixtures/example.docx"))
+  var saved=try await store.session(word.id)!
+  saved.engine=TranslationEngine.google.rawValue;saved.paragraphs[0].translation="Google only";saved.modifiedAt=Date()
+  try await store.save(word.id,session:saved)
+  let wordModel=ReaderModel(translator:WebTranslator(cacheDirectory:root.appendingPathComponent("test-cache")),library:store)
+  wordModel.engine = .google;wordModel.openBook(word)
+  for _ in 0..<200 where wordModel.importing {try await Task.sleep(nanoseconds:20_000_000)}
+  wordModel.engine = .bing;wordModel.changeEngine()
+  wordModel.acceptWordParagraphs(saved.paragraphs.map(\.text),url:wordModel.documentURL!)
+  await wordModel.flushLibrarySave()
+  let updated=try await store.session(word.id)!
+  precondition(updated.paragraphs[0].translation==nil,"Pending Word translations must belong to current engine")
   print("PASS: reader session restores translations/anchor/font, late-open cancellation and clear-cache persistence")
  }
 }

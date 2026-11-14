@@ -3,6 +3,7 @@ import WebKit
 
 @MainActor final class WordChecks: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     var view: WKWebView!
+    var window: NSWindow?
     var fixture: URL
     var phase = 0
     init(fixture: URL) { self.fixture = fixture }
@@ -12,6 +13,9 @@ import WebKit
         config.userContentController.add(self, name: "reader")
         view = WKWebView(frame: CGRect(x: 0, y: 0, width: 1100, height: 800), configuration: config)
         view.navigationDelegate = self
+        if window == nil { window = NSWindow(contentRect:CGRect(x:0,y:0,width:1100,height:800),styleMask:[.titled],backing:.buffered,defer:false) }
+        window?.contentView = view
+        window?.makeKeyAndOrderFront(nil)
         let file = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Resources/Word/index.html")
         view.loadFileURL(file, allowingReadAccessTo: file.deletingLastPathComponent())
     }
@@ -52,6 +56,11 @@ import WebKit
         updateReader([{id,expanded:false,loading:false,translation:'',error:''}],false);
         if(document.getElementById('translation-'+id))throw new Error('Collapse failed');
         if(document.querySelectorAll('table').length!==tableCount||document.querySelectorAll('img').length!==imageCount||document.querySelectorAll('math').length!==mathCount)throw new Error('Document objects lost');
+        const spacer=document.createElement('div');spacer.style.height='3000px';document.body.append(spacer);
+        restoreReadingPosition(id);
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        if(Math.abs(nodes[id].getBoundingClientRect().top)>3)throw new Error('Word paragraph scroll restoration failed');
+        reportReadingPosition();spacer.remove();
         return {tables:tableCount,images:imageCount,math:mathCount,paragraphs:nodes.length,translatedInsideTable:tableParagraph>=0};
         """
         view.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { result in
@@ -73,7 +82,7 @@ import WebKit
 @main struct WordChecksMain {
     @MainActor static func main() {
         _ = NSApplication.shared
-        NSApp.setActivationPolicy(.prohibited)
+        NSApp.setActivationPolicy(.accessory)
         guard CommandLine.arguments.count > 1 else { exit(2) }
         let test = WordChecks(fixture: URL(fileURLWithPath: CommandLine.arguments[1]))
         test.start()

@@ -66,11 +66,22 @@ import WebKit
                 model.openBook(book)
                 for _ in 0..<400 where model.importing { try await Task.sleep(nanoseconds:50_000_000) }
                 try await Task.sleep(nanoseconds:1_000_000_000)
-                func findPDF(_ view:NSView)->PDFView? {
+                @MainActor func findPDF(_ view:NSView)->PDFView? {
                     if let pdf=view as? PDFView { return pdf };for child in view.subviews { if let pdf=findPDF(child){return pdf} };return nil
                 }
                 guard let pdf=findPDF(host), let page=pdf.currentPage, pdf.document?.index(for:page)==1,model.paragraphs[0].translation=="持久保存测试" else { throw ReaderError.message("PDF visible page or translation did not restore") }
                 print("PASS: native PDF view restores page 2 and completed translation")
+                model.pdfMode = .paragraphs
+                try await Task.sleep(nanoseconds:500_000_000)
+                let pageThree=model.paragraphs.first { !$0.sourceRegions.isEmpty && $0.sourceRegions.allSatisfy{$0.page==3} }!
+                model.selectedPDFParagraph=pageThree.id;model.pdfMode = .original
+                try await Task.sleep(nanoseconds:1_000_000_000)
+                guard let jump=findPDF(host),let target=jump.currentPage,jump.document?.index(for:target)==2, model.pdfVisiblePage==3 else { throw ReaderError.message("Explicit paragraph navigation overwritten by saved PDF page") }
+                model.returnToLibrary();await model.flushLibrarySave();model.openBook(book)
+                for _ in 0..<400 where model.importing { try await Task.sleep(nanoseconds:50_000_000) }
+                try await Task.sleep(nanoseconds:800_000_000)
+                guard let reopened=findPDF(host),let page3=reopened.currentPage,reopened.document?.index(for:page3)==2 else { throw ReaderError.message("Explicit page was not persisted for reopen") }
+                print("PASS: explicit paragraph navigation overrides saved PDF page and survives reopen")
                 model.returnToLibrary();model.openBook(words)
                 for _ in 0..<400 where model.importing || !model.documentReady { try await Task.sleep(nanoseconds:50_000_000) }
                 guard model.documentReady,model.paragraphs.count==6 else { throw ReaderError.message("Word render failed") }
