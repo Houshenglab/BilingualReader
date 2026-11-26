@@ -30,7 +30,7 @@ struct LibraryCategoryBar: View {
                 .help("新建分类").accessibilityLabel("新建分类").accessibilityIdentifier("library-new-category")
             Button { batch = true } label: { Label("批量归类", systemImage: "checklist") }
                 .disabled(visibleBooks.isEmpty).accessibilityIdentifier("library-batch-category")
-        }.buttonStyle(.borderless).padding(.horizontal, 24).padding(.vertical, 12)
+        }.buttonStyle(.borderless).padding(.horizontal, 24).padding(.vertical, 8)
             .disabled(model.libraryBusy)
             .sheet(item: $editor) { draft in CategoryEditor(model: model, category: draft.category) }
             .sheet(isPresented: $batch) { LibraryBatchCategorySheet(model: model, books: visibleBooks) }

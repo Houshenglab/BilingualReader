@@ -105,6 +105,8 @@ zsh check.sh
 zsh check-library.sh
 zsh check-categories.sh
 zsh check-shelf-scroll.sh
+zsh check-shelf-layout.sh
+zsh check-window-layout.sh
 zsh check-library-model.sh
 zsh check-layout.sh
 zsh check-reliability.sh

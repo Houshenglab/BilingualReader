@@ -80,6 +80,23 @@ struct ParagraphView: View {
 
 private enum ResearchPanel: String { case translation, notes, ai }
 
+/// Keep SwiftUI content below the real system title bar. On the new macOS window
+/// style the content view otherwise extends 32 points behind the traffic lights.
+struct ReaderWindowChrome: NSViewRepresentable {
+    func makeNSView(context: Context) -> ChromeView { ChromeView() }
+    func updateNSView(_ view: ChromeView, context: Context) { view.configure() }
+    final class ChromeView: NSView {
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); configure() }
+        func configure() {
+            guard let window, window.sheetParent == nil, !window.styleMask.contains(.fullScreen) else { return }
+            if window.styleMask.contains(.fullSizeContentView) { window.styleMask.remove(.fullSizeContentView) }
+            if window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = false }
+            if window.titleVisibility != .visible { window.titleVisibility = .visible }
+        }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+
 struct ReaderView: View {
     @ObservedObject var model: ReaderModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -132,6 +149,7 @@ struct ReaderView: View {
             footer
             }
         }
+        .background(ReaderWindowChrome())
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.showingLibrary)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willResignActiveNotification)) { _ in model.saveReadingSession() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in model.saveReadingSession() }
@@ -384,7 +402,7 @@ struct ReaderSettings: View {
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("本机缓存", systemImage: "internaldrive") }
                 Section {
-                    LabeledContent("双语阅读", value: "0.8.0")
+                    LabeledContent("双语阅读", value: "0.8.1")
                     Text("文档与笔记在本机保存。翻译或主动发送 AI 提问时，所选文字会发送至配置的服务。")
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("关于", systemImage: "book.closed") }
@@ -462,6 +480,7 @@ struct BilingualReaderApp: App {
                     NSApp.activate(ignoringOtherApps: true)
                 }
         }
+        .windowStyle(.titleBar)
         .defaultSize(width: 1210, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {

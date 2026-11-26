@@ -14,11 +14,12 @@ struct LibraryView: View {
     private var motion: Animation? { reduceMotion ? nil : .spring(response: 0.48, dampingFraction: 0.82) }
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 20) {
-                Image(systemName: "books.vertical").font(.title2).foregroundStyle(Color.accentColor)
+            HStack(spacing: 14) {
+                Image(systemName: "books.vertical").font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.accentColor)
+                    .frame(width: 40, height: 40).background(Color.accentColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("文献书架").font(.system(size: 20, weight: .semibold))
-                    Text("\(model.libraryBooks.count) 份文档 · 阅读、批注与理解").font(.caption).foregroundStyle(.secondary)
+                    Text("\(model.libraryBooks.count) 份文档 · 阅读、笔记与 AI 助手").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 TextField("搜索书名或文档", text: $query).textFieldStyle(.roundedBorder).frame(width: 210)
@@ -29,7 +30,7 @@ struct LibraryView: View {
                 }.pickerStyle(.segmented).labelsHidden().frame(width: 86).help("立体书架 / 封面网格")
                 Button { model.chooseFile() } label: { Label("导入文档", systemImage: "plus") }
                     .buttonStyle(.borderedProminent).disabled(model.libraryBusy)
-            }.padding(24)
+            }.padding(.horizontal, 24).padding(.vertical, 14)
             Divider()
             LibraryCategoryBar(model: model, visibleBooks: books)
             Divider()
@@ -66,57 +67,18 @@ struct LibraryView: View {
                     }.padding(36)
                 }
             } else {
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("继续阅读 · 双指左右滑动翻书架").font(.callout.weight(.medium)).foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(selectedIndex + 1) / \(books.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    }.padding(.horizontal, 36).padding(.top, 28)
-                    GeometryReader { proxy in
-                        ZStack {
-                            Ellipse().fill(Color.black.opacity(0.08)).frame(width: min(proxy.size.width - 80, 760), height: 30)
-                                .blur(radius: 18).offset(y: 150)
-                            ForEach(Array(books.enumerated()), id: \.element.id) { index, book in
-                                if abs(index - selectedIndex) <= 4 {
-                                    let delta = index - selectedIndex
-                                    Button {
-                                        if delta == 0 { model.openBook(book) }
-                                        else { withAnimation(motion) { selectedID = book.id } }
-                                    } label: {
-                                        BookCover(book: book, url: model.libraryCovers[book.id])
-                                            .frame(width: 190, height: 265)
-                                            .rotation3DEffect(.degrees(delta == 0 ? 0 : delta < 0 ? 52 : -52), axis: (x: 0, y: 1, z: 0), perspective: 0.65)
-                                            .scaleEffect(delta == 0 ? 1.08 : 0.9 - Double(abs(delta)) * 0.035)
-                                            .opacity(abs(delta) > 3 ? 0.5 : 1)
-                                    }.buttonStyle(.plain).disabled(model.libraryBusy)
-                                        .offset(x: CGFloat(delta) * min(112, proxy.size.width / 7), y: delta == 0 ? -8 : 6)
-                                        .zIndex(Double(10 - abs(delta)))
-                                        .accessibilityLabel("\(book.title)，\(detail(book))")
-                                        .contextMenu { bookMenu(book) }
-                                }
-                            }
-                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .contentShape(Rectangle())
-                            .background(ShelfScrollInput { distance in
-                                if !model.libraryBusy { move(distance) }
-                            })
-                            .simultaneousGesture(DragGesture(minimumDistance: 25).onEnded { value in
-                                if abs(value.translation.width) > abs(value.translation.height) { move(value.translation.width < 0 ? 1 : -1) }
-                            })
-                    }.frame(minHeight: 310, maxHeight: 400).clipped()
-                    if let book = selected {
-                        VStack(spacing: 10) {
-                            Text(book.title).font(.system(size: 23, weight: .medium, design: .serif)).lineLimit(2).multilineTextAlignment(.center).frame(maxWidth: 620)
-                            Text(detail(book)).font(.callout).foregroundStyle(.secondary)
-                            HStack(spacing: 24) {
-                                Button { move(-1) } label: { Image(systemName: "chevron.left") }.disabled(selectedIndex == 0).help("上一本")
-                                Button { model.openBook(book) } label: { Label(book.page > 1 || book.translatedCount > 0 ? "继续阅读" : "开始阅读", systemImage: "book") }
-                                    .buttonStyle(.borderedProminent).controlSize(.large).disabled(model.libraryBusy)
-                                Button { move(1) } label: { Image(systemName: "chevron.right") }.disabled(selectedIndex == books.count - 1).help("下一本")
-                            }.padding(.top, 10)
-                        }.padding(.horizontal, 32)
+                GeometryReader { proxy in
+                    if proxy.size.width >= 900 {
+                        HStack(spacing: 24) {
+                            if let book = selected { readingCard(book, compact: false).frame(width: min(292, max(228, proxy.size.width * 0.24))) }
+                            shelfStage
+                        }.padding(24)
+                    } else {
+                        VStack(spacing: 12) {
+                            shelfStage
+                            if let book = selected { readingCard(book, compact: true) }
+                        }.padding(16)
                     }
-                    Spacer(minLength: 24)
                 }
                 .onMoveCommand { direction in if direction == .left { move(-1) }; if direction == .right { move(1) } }
             }
@@ -126,15 +88,87 @@ struct LibraryView: View {
                 Text(model.libraryStatus.isEmpty ? "文档与笔记保存在本机 · 阅读位置自动记住" : model.libraryStatus)
                 Spacer()
                 Text("PDF · WORD · TXT").tracking(1)
-            }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)
+            }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 9)
         }
-        .background(LinearGradient(colors: [Color(nsColor: .windowBackgroundColor), Color.accentColor.opacity(0.035)], startPoint: .top, endPoint: .bottom))
+        .background(Color(nsColor: .windowBackgroundColor))
         .onChange(of: query) { _ in selectedID = nil }
         .onChange(of: model.libraryFilter) { _ in selectedID = nil }
         .alert("从书架移除？", isPresented: Binding(get: { removal != nil }, set: { if !$0 { removal = nil } }), presenting: removal) { book in
             Button("取消", role: .cancel) { removal = nil }
             Button("移除", role: .destructive) { model.removeBook(book); removal = nil }
         } message: { book in Text("将移除“\(book.title)”的书库副本和阅读记录，你导入时的原文件不会被删除。") }
+    }
+    private var shelfStage: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Label("立体书架", systemImage: "rectangle.stack").font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(selectedIndex + 1) / \(books.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }.padding(.horizontal, 18).padding(.top, 16)
+            GeometryReader { proxy in
+                let layout = ShelfGeometry(count: books.count, selected: selectedIndex, width: proxy.size.width, height: proxy.size.height)
+                ZStack {
+                    ForEach(Array(books.enumerated()), id: \.element.id) { index, book in
+                        if layout.indices.contains(index) {
+                            let delta = index - selectedIndex
+                            Button {
+                                if delta == 0 { model.openBook(book) }
+                                else { withAnimation(motion) { selectedID = book.id } }
+                            } label: {
+                                BookCover(book: book, url: model.libraryCovers[book.id])
+                                    .frame(width: layout.coverWidth, height: layout.coverHeight)
+                                    .compositingGroup()
+                                    .rotation3DEffect(.degrees(delta == 0 ? 0 : delta < 0 ? 33 : -33), axis: (x: 0, y: 1, z: 0), perspective: 0.62)
+                                    .scaleEffect(delta == 0 ? 1.08 : max(0.78, 0.96 - Double(abs(delta)) * 0.035))
+                                    .opacity(delta == 0 ? 1 : 0.999)
+                            }.buttonStyle(.plain).disabled(model.libraryBusy)
+                                .offset(x: layout.x(for: index), y: delta == 0 ? -3 : 5)
+                                .zIndex(Double(10 - abs(delta)))
+                                .accessibilityLabel("\(book.title)，\(detail(book))")
+                                .contextMenu { bookMenu(book) }
+                        }
+                    }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .background(ShelfScrollInput { distance in if !model.libraryBusy { move(distance) } })
+                    .simultaneousGesture(DragGesture(minimumDistance: 25).onEnded { value in
+                        if abs(value.translation.width) > abs(value.translation.height) { move(value.translation.width < 0 ? 1 : -1) }
+                    })
+            }.clipped()
+            Label("双指左右滑动，或点击封面切换", systemImage: "hand.draw").font(.caption).foregroundStyle(.secondary)
+                .padding(.bottom, 14)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.07)))
+    }
+    private func readingCard(_ book: LibraryBook, compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 18) {
+            HStack(spacing: 6) {
+                Image(systemName: "bookmark.fill").foregroundStyle(Color.accentColor)
+                Text(book.page > 1 || book.translatedCount > 0 ? "继续阅读" : "准备阅读").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Text(book.format.uppercased()).font(.caption2.weight(.semibold)).tracking(0.8)
+                    .padding(.horizontal, 7).padding(.vertical, 4).background(Color.accentColor.opacity(0.1), in: Capsule()).foregroundStyle(Color.accentColor)
+            }
+            Text(book.title).font(.system(size: compact ? 17 : 22, weight: .semibold)).lineLimit(compact ? 1 : 4)
+                .multilineTextAlignment(.leading).help(book.title).fixedSize(horizontal: false, vertical: true)
+            if book.pageCount > 0 {
+                ProgressView(value: Double(min(max(1,book.page),book.pageCount)), total: Double(book.pageCount)).tint(Color.accentColor)
+            }
+            Text(detail(book)).font(.callout).foregroundStyle(.secondary)
+            if !compact { Spacer(minLength: 0) }
+            VStack(spacing: 8) {
+                Button { model.openBook(book) } label: {
+                    Label(book.page > 1 || book.translatedCount > 0 ? "继续阅读" : "开始阅读", systemImage: "book").frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).controlSize(.large).disabled(model.libraryBusy)
+                HStack(spacing: 8) {
+                    Button { move(-1) } label: { Label("上一篇", systemImage: "chevron.left").frame(maxWidth: .infinity) }.disabled(selectedIndex == 0).help("上一篇")
+                    Button { move(1) } label: { HStack(spacing: 4) { Text("下一篇"); Image(systemName: "chevron.right") }.frame(maxWidth: .infinity) }.disabled(selectedIndex == books.count - 1).help("下一篇")
+                }.controlSize(.regular)
+            }
+        }.padding(compact ? 14 : 22).frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.07)))
     }
     @ViewBuilder private func bookMenu(_ book: LibraryBook) -> some View {
         Button("打开阅读") { model.openBook(book) }.disabled(model.libraryBusy)
@@ -185,6 +219,7 @@ struct BookCover: View {
                     Color.white
                     Image(nsImage: image).resizable().scaledToFit().padding(6)
                 } else {
+                    tint
                     LinearGradient(colors: [tint, tint.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     VStack(alignment: .leading, spacing: 16) {
                         Text(book.format.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(3).opacity(0.65)
