@@ -57,6 +57,7 @@
 - 划选原文，使用阅读区上方的工具栏选择黄色、绿色、蓝色或粉色高亮，或添加批注；点击批注标记可回看内容。
 - 打开「笔记」查看、编辑和搜索本篇文献的记录，点击「回到原文」定位；可添加独立笔记并导出 Markdown。原文件不被写入。
 - 打开「AI 助手」并设置自己的兼容 Chat Completions API：地址（如服务商提供的 `/v1`）、模型名称、API 密钥。密钥按服务地址保存在 macOS 钥匙串；本地服务可使用 loopback HTTP。
+- 0.8.3：左右拖动阅读区与 AI 之间的分隔线调整宽度；上下拖动输入框上方调整高度；点击独立窗口图标可移动或停靠 AI。详细发送说明收在信息菜单，长文节选范围始终明确标记。
 - 0.8.2：配置 API 地址及密钥后可获取模型列表、搜索或手动填写模型；在对话面板直接切换模型和支持的推理强度。高强度通常耗时更长、可能产生更多费用。未知模型默认采用服务商的推理设置。
 - 支持文献内容、仅选中文字和仅对话；本轮资料范围、长文节选以及近期对话发送提示显示在发送按钮旁。文献文字超过 24,000 字符时使用分布在全文中的节选，并标注非全文。只有主动点击发送才会联网；API 费用取决于你的服务商。
 - 笔记及已保存聊天记录分别位于应用支持目录的 `ResearchNotes` 和 `ResearchChats`。从书架移除后仍保留独立笔记与对话，重新导入相同内容可恢复。
@@ -108,6 +109,8 @@ zsh check-categories.sh
 zsh check-shelf-scroll.sh
 zsh check-shelf-layout.sh
 zsh check-window-layout.sh
+zsh check-reader-pane.sh
+zsh preview-reader-pane.sh
 zsh check-library-model.sh
 zsh check-layout.sh
 zsh check-reliability.sh

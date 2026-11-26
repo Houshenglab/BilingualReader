@@ -102,6 +102,14 @@ struct ReaderView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var restoringAnchor = false
     @State private var panel: ResearchPanel? = .translation
+    @StateObject private var floatingAI = FloatingResearchAIController()
+    @AppStorage("reader.sidebar.aiWidth") private var aiWidth = 420.0
+    @AppStorage("reader.sidebar.notesWidth") private var notesWidth = 360.0
+    @AppStorage("reader.sidebar.translationWidth") private var translationWidth = 360.0
+    private var panelWidth: Binding<Double> {
+        switch panel { case .ai: return $aiWidth; case .notes: return $notesWidth; default: return $translationWidth }
+    }
+    private var hasSidebar: Bool { panel == .notes || panel == .ai || (panel == .translation && isPDF && model.pdfMode == .original) }
     private var isPDF: Bool { model.documentURL?.pathExtension.lowercased() == "pdf" }
     var body: some View {
         VStack(spacing: 0) {
@@ -115,7 +123,7 @@ struct ReaderView: View {
                 ResearchSelectionBar(notebook: model.notebook, showNotes: { panel = .notes }, askAI: {
                     model.researchAI.scope = .selection
                     model.researchAI.question = "请解释选中的这段文字及其在文献中的含义。"
-                    panel = .ai
+                    if floatingAI.active { floatingAI.bringForward() } else { panel = .ai }
                 })
             }
             Divider()
@@ -124,26 +132,7 @@ struct ReaderView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.paragraphs.isEmpty && !(isPDF && model.pdfLayoutPending) { welcome }
             else {
-                HSplitView {
-                    if let url = model.documentURL, url.pathExtension.lowercased() == "docx" {
-                        WordView(model: model, url: url).id(model.documentID).frame(minWidth: 450)
-                    } else if let url = model.documentURL, isPDF, model.pdfMode == .original {
-                        LinkedPDF(model: model, url: url).id(model.documentID).frame(minWidth: 440, idealWidth: 760)
-                    } else { readingBody.frame(minWidth: 440) }
-                    if let panel {
-                        switch panel {
-                        case .translation:
-                            if isPDF && model.pdfMode == .original { PDFTranslationPanel(model: model).frame(minWidth: 300, idealWidth: 350, maxWidth: 460) }
-                        case .notes:
-                            ResearchNotesView(notebook: model.notebook).frame(minWidth: 300, idealWidth: 360, maxWidth: 440)
-                        case .ai:
-                            ResearchAIView(ai: model.researchAI, title: model.documentTitle, paragraphs: model.paragraphs.map(\.text), selectedText: model.notebook.selection?.quote, saveNote: { answer in
-                                if model.notebook.addNote(text: answer) { model.status = "AI 回答已保存为文献笔记" }
-                                else { model.alert = model.notebook.error ?? "笔记保存失败" }
-                            }).frame(minWidth: 320, idealWidth: 390, maxWidth: 500)
-                        }
-                    }
-                }
+                documentWorkspace
             }
             Divider()
             footer
@@ -158,9 +147,11 @@ struct ReaderView: View {
         .tint(ReaderBrand.accent)
         .accentColor(ReaderBrand.accent)
         .onChange(of: model.documentID) { _ in panel = isPDF && model.pdfMode == .original ? .translation : nil }
+        .onChange(of: model.showingLibrary) { showing in if showing { floatingAI.close() } }
+        .onDisappear { floatingAI.close() }
         .onChange(of: model.pdfMode) { mode in
-            if mode == .original && panel == nil { panel = .translation }
-            if mode == .paragraphs && panel == .translation { panel = nil }
+            if mode == PDFReadingMode.original && panel == nil { panel = ResearchPanel.translation }
+            if mode == PDFReadingMode.paragraphs && panel == ResearchPanel.translation { panel = nil }
         }
         .onChange(of: model.notebook.commentRequest) { value in if value != nil { panel = .notes } }
         .onChange(of: model.notebook.requestedJump) { note in
@@ -191,6 +182,36 @@ struct ReaderView: View {
         }
         .onOpenURL { model.open($0) }
     }
+    private var documentWorkspace: some View {
+        ReaderResizableSplit(presented: hasSidebar, preferredWidth: panelWidth) { documentContent } side: { researchSidebar }
+    }
+    @ViewBuilder private var documentContent: some View {
+        if let url = model.documentURL, url.pathExtension.lowercased() == "docx" {
+            WordView(model: model, url: url).id(model.documentID)
+        } else if let url = model.documentURL, isPDF, model.pdfMode == .original {
+            LinkedPDF(model: model, url: url).id(model.documentID)
+        } else { readingBody }
+    }
+    @ViewBuilder private var researchSidebar: some View {
+        if let panel {
+            switch panel {
+            case .translation:
+                if isPDF && model.pdfMode == .original { PDFTranslationPanel(model: model) }
+            case .notes:
+                ResearchNotesView(notebook: model.notebook)
+            case .ai:
+                ResearchAIView(ai: model.researchAI, title: model.documentTitle, paragraphs: model.paragraphs.map(\.text), selectedText: model.notebook.selection?.quote, saveNote: saveAIAnswer, onDetach: detachAI)
+            }
+        }
+    }
+    private func saveAIAnswer(_ answer: String) {
+        if model.notebook.addNote(text: answer) { model.status = "AI 回答已保存为文献笔记" }
+        else { model.alert = model.notebook.error ?? "笔记保存失败" }
+    }
+    private func detachAI() {
+        floatingAI.present(model: model, onDock: { panel = ResearchPanel.ai })
+        panel = nil
+    }
     private var researchNavigation: some View {
         HStack(spacing: 12) {
             Label("文献工作台", systemImage: "book.pages").font(.callout.weight(.medium)).foregroundStyle(.secondary)
@@ -203,13 +224,14 @@ struct ReaderView: View {
     }
     private func panelButton(_ target: ResearchPanel, title: String, icon: String) -> some View {
         Button {
+            if target == .ai && floatingAI.active { floatingAI.bringForward(); return }
             panel = panel == target ? nil : target
         } label: {
             Label(title, systemImage: icon).font(.callout.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 6)
-                .foregroundStyle(panel == target ? Color.accentColor : Color.primary)
-                .background(panel == target ? Color.accentColor.opacity(0.11) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+                .foregroundStyle((panel == target || target == .ai && floatingAI.active) ? Color.accentColor : Color.primary)
+                .background((panel == target || target == .ai && floatingAI.active) ? Color.accentColor.opacity(0.11) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
         }.buttonStyle(.plain).help(panel == target ? "收起\(title)" : "打开\(title)")
-            .accessibilityAddTraits(panel == target ? .isSelected : [])
+            .accessibilityAddTraits(panel == target || target == .ai && floatingAI.active ? .isSelected : [])
     }
     private var toolbar: some View {
         HStack(spacing: 16) {
@@ -402,7 +424,7 @@ struct ReaderSettings: View {
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("本机缓存", systemImage: "internaldrive") }
                 Section {
-                    LabeledContent("双语阅读", value: "0.8.2")
+                    LabeledContent("双语阅读", value: "0.8.3")
                     Text("文档与笔记在本机保存。翻译或主动发送 AI 提问时，所选文字会发送至配置的服务。")
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("关于", systemImage: "book.closed") }

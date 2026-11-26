@@ -1,0 +1,3 @@
+# 0.8.3 compact AI workspace
+
+User screenshot shows conversation compressed by a tall header, fixed input box, prompt cards, and permanent explanatory copy. Make conversation the primary area: one toolbar for model/effort and actions, minimal quick prompts, one short scope/status row, detailed scope/privacy and API fee information accessible by info action rather than always visible. Keep explicit partial-context indication. User can drag the horizontal divider and input composer handle. An independent native resizable window provides optional free movement and docks back using shared ReaderModel/ResearchAI so history/draft stays intact. Preserve reader data, model configuration, and existing dynamic strength effect.
