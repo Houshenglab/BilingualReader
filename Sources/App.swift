@@ -4,6 +4,7 @@ import PDFKit
 import UniformTypeIdentifiers
 
 enum ReaderBrand {
+    static let accent = Color(red: 0.06, green: 0.46, blue: 0.43)
     static let icon: NSImage = {
         if let path = Bundle.main.resourceURL?.appendingPathComponent("AppIcon.png"), let image = NSImage(contentsOf: path) { return image }
         if let path = Bundle.main.resourceURL?.appendingPathComponent("AppIcon.icns"), let image = NSImage(contentsOf: path) { return image }
@@ -48,8 +49,15 @@ struct ParagraphView: View {
     let paragraph: ReadingParagraph
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(paragraph.text).font(.system(size: model.fontSize, design: .serif))
-                .lineSpacing(8).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            SelectableParagraphText(text: paragraph.text, paragraphID: paragraph.id, fontSize: model.fontSize, notebook: model.notebook)
+            let comments = model.notebook.notes.filter { $0.anchor?.paragraphID == paragraph.id && !$0.text.isEmpty }
+            if !comments.isEmpty {
+                HStack(spacing: 8) {
+                    Button { model.notebook.beginEditing(comments[0]) } label: { Label("\(comments.count) 条批注", systemImage: "bubble.left.and.bubble.right") }
+                        .buttonStyle(.borderless).foregroundStyle(Color.accentColor)
+                    Text(comments[0].text).lineLimit(1).foregroundStyle(.secondary)
+                }.font(.caption).padding(8).background(Color.accentColor.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
+            }
             if paragraph.expanded {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -70,10 +78,13 @@ struct ParagraphView: View {
     }
 }
 
+private enum ResearchPanel: String { case translation, notes, ai }
+
 struct ReaderView: View {
     @ObservedObject var model: ReaderModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var restoringAnchor = false
+    @State private var panel: ResearchPanel? = .translation
     private var isPDF: Bool { model.documentURL?.pathExtension.lowercased() == "pdf" }
     var body: some View {
         VStack(spacing: 0) {
@@ -81,6 +92,15 @@ struct ReaderView: View {
                 LibraryView(model: model).transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.97)))
             } else {
             toolbar
+            if model.documentURL != nil && !model.importing {
+                Divider()
+                researchNavigation
+                ResearchSelectionBar(notebook: model.notebook, showNotes: { panel = .notes }, askAI: {
+                    model.researchAI.scope = .selection
+                    model.researchAI.question = "请解释选中的这段文字及其在文献中的含义。"
+                    panel = .ai
+                })
+            }
             Divider()
             if model.importing {
                 VStack(spacing: 16) { ProgressView(); Text("正在读取文档…").foregroundStyle(.secondary) }
@@ -89,11 +109,23 @@ struct ReaderView: View {
             else {
                 HSplitView {
                     if let url = model.documentURL, url.pathExtension.lowercased() == "docx" {
-                        WordView(model: model, url: url).id(model.documentID)
+                        WordView(model: model, url: url).id(model.documentID).frame(minWidth: 450)
                     } else if let url = model.documentURL, isPDF, model.pdfMode == .original {
-                        LinkedPDF(model: model, url: url).id(model.documentID).frame(minWidth: 420, idealWidth: 720)
-                        PDFTranslationPanel(model: model).frame(minWidth: 300, idealWidth: 360, maxWidth: 420)
-                    } else { readingBody }
+                        LinkedPDF(model: model, url: url).id(model.documentID).frame(minWidth: 440, idealWidth: 760)
+                    } else { readingBody.frame(minWidth: 440) }
+                    if let panel {
+                        switch panel {
+                        case .translation:
+                            if isPDF && model.pdfMode == .original { PDFTranslationPanel(model: model).frame(minWidth: 300, idealWidth: 350, maxWidth: 460) }
+                        case .notes:
+                            ResearchNotesView(notebook: model.notebook).frame(minWidth: 300, idealWidth: 360, maxWidth: 440)
+                        case .ai:
+                            ResearchAIView(ai: model.researchAI, title: model.documentTitle, paragraphs: model.paragraphs.map(\.text), selectedText: model.notebook.selection?.quote, saveNote: { answer in
+                                if model.notebook.addNote(text: answer) { model.status = "AI 回答已保存为文献笔记" }
+                                else { model.alert = model.notebook.error ?? "笔记保存失败" }
+                            }).frame(minWidth: 320, idealWidth: 390, maxWidth: 500)
+                        }
+                    }
                 }
             }
             Divider()
@@ -105,7 +137,17 @@ struct ReaderView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in model.saveReadingSession() }
         .frame(minWidth: 900, minHeight: 600)
         .background(Color(nsColor: .textBackgroundColor))
-        .accentColor(Color(red: 0.22, green: 0.40, blue: 0.66))
+        .tint(ReaderBrand.accent)
+        .accentColor(ReaderBrand.accent)
+        .onChange(of: model.documentID) { _ in panel = isPDF && model.pdfMode == .original ? .translation : nil }
+        .onChange(of: model.pdfMode) { mode in
+            if mode == .original && panel == nil { panel = .translation }
+            if mode == .paragraphs && panel == .translation { panel = nil }
+        }
+        .onChange(of: model.notebook.commentRequest) { value in if value != nil { panel = .notes } }
+        .onChange(of: model.notebook.requestedJump) { note in
+            if let anchor = note?.anchor, isPDF, !anchor.pdfRegions.isEmpty && model.pdfMode == .paragraphs { model.pdfMode = .original }
+        }
         .onChange(of: model.engine) { _ in model.changeEngine() }
         .sheet(isPresented: $model.showingSettings) { ReaderSettings(model: model) }
         .alert("无法完成操作", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } })) {
@@ -130,6 +172,26 @@ struct ReaderView: View {
             return true
         }
         .onOpenURL { model.open($0) }
+    }
+    private var researchNavigation: some View {
+        HStack(spacing: 12) {
+            Label("文献工作台", systemImage: "book.pages").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+            Spacer()
+            if isPDF && model.pdfMode == .original { panelButton(.translation, title: "译文", icon: "character.bubble") }
+            panelButton(.notes, title: model.notebook.notes.isEmpty ? "笔记" : "笔记 · \(model.notebook.notes.count)", icon: "note.text")
+            panelButton(.ai, title: "AI 助手", icon: "sparkles")
+        }.padding(.horizontal, 20).padding(.vertical, 7)
+            .background(Color(nsColor: .windowBackgroundColor))
+    }
+    private func panelButton(_ target: ResearchPanel, title: String, icon: String) -> some View {
+        Button {
+            panel = panel == target ? nil : target
+        } label: {
+            Label(title, systemImage: icon).font(.callout.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 6)
+                .foregroundStyle(panel == target ? Color.accentColor : Color.primary)
+                .background(panel == target ? Color.accentColor.opacity(0.11) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+        }.buttonStyle(.plain).help(panel == target ? "收起\(title)" : "打开\(title)")
+            .accessibilityAddTraits(panel == target ? .isSelected : [])
     }
     private var toolbar: some View {
         HStack(spacing: 16) {
@@ -169,7 +231,7 @@ struct ReaderView: View {
             }
             Button { model.showingSettings = true } label: { Image(systemName: "slider.horizontal.3") }
                 .help("设置翻译服务与缓存").accessibilityLabel("设置")
-        }.controlSize(.regular).padding(.horizontal, 24).padding(.vertical, 12)
+        }.controlSize(.regular).padding(.horizontal, 20).padding(.vertical, 11)
             .background(Color(nsColor: .windowBackgroundColor))
     }
     private var readingMenu: some View {
@@ -266,6 +328,14 @@ struct ReaderView: View {
                     guard !restoringAnchor, let top = ReaderModel.visibleParagraph(in: positions) else { return }
                     model.readingParagraphID = top
                 }
+                .onChange(of: model.notebook.requestedJump) { note in
+                    if let anchor = note?.anchor, anchor.pdfRegions.isEmpty, let id = anchor.paragraphID, model.paragraphs.indices.contains(id) {
+                        if model.readingParagraphs.contains(where: { $0.id == id }) {
+                            proxy.scrollTo(id, anchor: .center)
+                            DispatchQueue.main.async { model.notebook.requestedJump = nil }
+                        } else { model.showPDFDetails = true; DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center); model.notebook.requestedJump = nil } }
+                    }
+                }
                 .onAppear {
                     restoringAnchor = true
                     let target = model.selectedPDFParagraph ?? model.readingParagraphID
@@ -314,8 +384,8 @@ struct ReaderSettings: View {
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("本机缓存", systemImage: "internaldrive") }
                 Section {
-                    LabeledContent("双语阅读", value: "0.6.0")
-                    Text("文档在本机读取，仅待翻译的文字发送到所选服务。")
+                    LabeledContent("双语阅读", value: "0.8.0")
+                    Text("文档与笔记在本机保存。翻译或主动发送 AI 提问时，所选文字会发送至配置的服务。")
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("关于", systemImage: "book.closed") }
             }.formStyle(.grouped)
@@ -392,7 +462,7 @@ struct BilingualReaderApp: App {
                     NSApp.activate(ignoringOtherApps: true)
                 }
         }
-        .defaultSize(width: 1100, height: 800)
+        .defaultSize(width: 1210, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("导入文档…") { model.chooseFile() }.keyboardShortcut("o")

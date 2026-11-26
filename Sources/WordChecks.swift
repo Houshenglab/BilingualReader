@@ -56,6 +56,24 @@ import WebKit
         updateReader([{id,expanded:false,loading:false,translation:'',error:''}],false);
         if(document.getElementById('translation-'+id))throw new Error('Collapse failed');
         if(document.querySelectorAll('table').length!==tableCount||document.querySelectorAll('img').length!==imageCount||document.querySelectorAll('math').length!==mathCount)throw new Error('Document objects lost');
+        // Construct a controlled multi-run paragraph without changing the fixture.
+        const test=document.createElement('p');test.dataset.rid=nodes.length;
+        const strong=document.createElement('strong');strong.textContent='A😀';
+        const italic=document.createElement('em');italic.textContent='bcde';
+        test.append(strong,italic);document.body.append(test);nodes.push(test);
+        const testID=nodes.length-1;
+        const range=document.createRange();range.setStart(strong.firstChild,1);range.setEnd(italic.firstChild,2);
+        window.getSelection().removeAllRanges();window.getSelection().addRange(range);
+        const a=selectionAnchor();
+        if(a.id!==testID||a.quote!=='😀bc'||a.location!==1||a.length!==4)throw new Error('Word selection UTF-16 anchor mismatch');
+        updateAnnotations([{id:'first',paragraphID:testID,quote:a.quote,location:a.location,length:a.length,color:'yellow',hasComment:true},{id:'second',paragraphID:testID,quote:'bcd',location:3,length:3,color:'green',hasComment:false}]);
+        if(sourceText(test)!=='A😀bcde'||!test.querySelector('strong')||!test.querySelector('em'))throw new Error('Original styled runs altered');
+        const marks=[...test.querySelectorAll('mark.reader-annotation-mark')];
+        if(marks.map(m=>m.textContent).join('')!=='😀bcd'||!test.querySelector('.reader-note-marker'))throw new Error('Exact/overlapping highlight or comment marker missing');
+        if(!jumpToAnnotation('first',testID))throw new Error('Note jump failed');
+        updateAnnotations([]);
+        if(sourceText(test)!=='A😀bcde'||test.querySelector('mark,button'))throw new Error('Annotation removal damaged source');
+        window.getSelection().removeAllRanges();test.remove();nodes.pop();
         const spacer=document.createElement('div');spacer.style.height='3000px';document.body.append(spacer);
         restoreReadingPosition(id);
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));

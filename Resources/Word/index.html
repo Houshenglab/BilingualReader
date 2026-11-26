@@ -9,6 +9,12 @@ p[data-rid]{cursor:pointer}p[data-rid]:hover{outline:1px solid #b1c4dc;outline-o
 .reader-translation.pending,.reader-translation.error{font:14px/20px system-ui;color:#586477}.reader-translation.error{background:#faf6f0;border-color:#ede2d3;color:#805e32}
 .reader-translation button{font:inherit;color:#3866a8;cursor:pointer;background:white;border:1px solid #cad5e3;border-radius:4px;margin-left:8px;padding:4px 8px}
 .reader-translation button:focus-visible{outline:2px solid #3866a8;outline-offset:2px}
+.reader-annotation-mark{border-radius:2px;color:inherit!important;padding:0;margin:0;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.reader-note-anchor{position:relative}
+.reader-note-marker{position:absolute;right:-26px;top:0;min-width:20px;height:20px;border:0;border-radius:8px;background:#0d817a;color:white;font:11px/20px system-ui;cursor:pointer;padding:0 5px;z-index:1}
+.reader-note-marker::before{content:attr(data-count)}
+.reader-note-marker:focus-visible{outline:2px solid #3866a8;outline-offset:2px}
+.reader-note-target{outline:2px solid #0d817a;outline-offset:4px}
 @media(prefers-color-scheme:dark){html,body{background:#1f1f1f;color:#e4e4e4}}
 </style></head><body><div id="loading">正在恢复 Word 原文排版…</div><div id="styles"></div><div id="document"></div>
 <script>
@@ -21,8 +27,8 @@ async function renderWord(base64){
  nodes=Array.from(document.querySelectorAll('#document article p')).filter(p=>p.innerText.trim().length>0);
  nodes.forEach((p,id)=>{
   p.dataset.rid=id;p.tabIndex=0;p.title='点击展开或收起中文';
-  p.addEventListener('click',e=>{if(e.target.closest('a')||window.getSelection().toString().length)return;toggle(id)});
-  p.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();toggle(id)}});
+  p.addEventListener('click',e=>{if(e.target.closest('a,button')||window.getSelection().toString().length)return;toggle(id)});
+  p.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target===p){e.preventDefault();toggle(id)}});
  });
  observer=new IntersectionObserver(entries=>{for(const e of entries){const id=Number(e.target.dataset.rid);if(e.isIntersecting){visible.add(id);if(automatic&&/[A-Za-z]{3}/.test(e.target.innerText))post({kind:'visible',id})}else visible.delete(id)}},{threshold:0.05});
  nodes.forEach(p=>observer.observe(p));document.getElementById('loading').remove();
@@ -42,6 +48,114 @@ function updateReader(states,auto){
  }
  const was=automatic;automatic=auto;
  if(automatic&&!was)for(const id of visible){if(/[A-Za-z]{3}/.test(nodes[id].innerText))post({kind:'visible',id})}
+}
+// Annotation coordinates use UTF-16 offsets into the source DOM text of one
+// paragraph. The stored quote is checked before painting, so changes to a
+// paragraph cannot silently mark the wrong words.
+function sourceTextNodes(p){
+ const walker=document.createTreeWalker(p,NodeFilter.SHOW_TEXT,{acceptNode:n=>
+  n.parentElement?.closest('.reader-note-marker')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
+ const result=[];let n;while(n=walker.nextNode())result.push(n);
+ return result;
+}
+function sourceText(p){return sourceTextNodes(p).map(n=>n.data).join('')}
+function selectionAnchor(){
+ const selection=window.getSelection();
+ if(!selection||selection.rangeCount!==1||selection.isCollapsed)return null;
+ const r=selection.getRangeAt(0);
+ const para=n=>(n.nodeType===Node.ELEMENT_NODE?n:n.parentElement)?.closest('p[data-rid]');
+ const first=para(r.startContainer),last=para(r.endContainer);
+ if(!first||first!==last)return {unsupported:true};
+ // Range.toString uses DOM UTF-16 offsets, not visual line wraps.
+ const prefix=document.createRange();prefix.selectNodeContents(first);prefix.setEnd(r.startContainer,r.startOffset);
+ const quote=r.toString(), start=prefix.toString().length;
+ if(!quote.trim()||sourceText(first).slice(start,start+quote.length)!==quote)return null;
+ return {id:Number(first.dataset.rid),quote,location:start,length:quote.length};
+}
+function reportSelection(){
+ const anchor=selectionAnchor();
+ if(anchor?.unsupported){post({kind:'selectionUnsupported'});return}
+ if(anchor)post({kind:'selection',...anchor});
+}
+document.addEventListener('mouseup',e=>{
+ if(e.target.closest('p[data-rid]')&&!e.target.closest('.reader-note-marker')){
+  setTimeout(()=>{if(window.getSelection()?.isCollapsed)post({kind:'selectionCleared'});else reportSelection()},0);
+ }
+});
+document.addEventListener('keyup',e=>{if(e.shiftKey||(e.metaKey&&e.key.toLowerCase()==='a'))reportSelection()});
+function resolveNoteRange(text,n){
+ if(!n.quote)return null;
+ if(Number.isInteger(n.location)&&Number.isInteger(n.length)&&n.location>=0&&n.length>0&&text.slice(n.location,n.location+n.length)===n.quote)
+  return {start:n.location,end:n.location+n.length,n};
+ // A paragraph can be reformatted; use exact quote only if unambiguous.
+ const start=text.indexOf(n.quote);
+ if(start<0||text.indexOf(n.quote,start+1)>=0)return null;
+ return {start,end:start+n.quote.length,n};
+}
+const noteColors={yellow:'#ffe587b3',green:'#b6edbdb3',blue:'#b5dcffb3',pink:'#ffc5dfb3',comment:'#89d7d24d'};
+let annotatedParagraphs=new Set();
+function clearParagraphAnnotations(p){
+ p.querySelectorAll('.reader-note-marker').forEach(b=>b.remove());
+ p.classList.remove('reader-note-anchor');
+ p.querySelectorAll('mark.reader-annotation-mark').forEach(m=>m.replaceWith(...m.childNodes));
+ p.normalize();
+}
+function updateAnnotations(notes){
+ const byParagraph=new Map();
+ for(const n of notes){
+  if(!Number.isInteger(n.paragraphID)||!nodes[n.paragraphID])continue;
+  if(!byParagraph.has(n.paragraphID))byParagraph.set(n.paragraphID,[]);
+  byParagraph.get(n.paragraphID).push(n);
+ }
+ const affected=new Set([...annotatedParagraphs,...byParagraph.keys()]);
+ for(const id of affected){
+  const p=nodes[id];if(!p)continue;
+  clearParagraphAnnotations(p);
+  const available=byParagraph.get(id)||[];
+  const ranges=available.map(n=>resolveNoteRange(sourceText(p),n)).filter(Boolean);
+  // Split original text nodes only. Never replace a paragraph's HTML or
+  // discard its styled runs, hyperlinks, equations, images, or tables.
+  let base=0;
+  for(const textNode of sourceTextNodes(p)){
+   const text=textNode.data,end=base+text.length;
+   const hits=ranges.filter(r=>r.end>base&&r.start<end);
+   if(hits.length){
+    const cuts=[...new Set([0,text.length,...hits.flatMap(r=>[Math.max(0,r.start-base),Math.min(text.length,r.end-base)])])].sort((a,b)=>a-b);
+    const fragment=document.createDocumentFragment();
+    for(let i=1;i<cuts.length;i++){
+     const lo=cuts[i-1],hi=cuts[i],part=text.slice(lo,hi);
+     const active=hits.filter(r=>r.start<base+hi&&r.end>base+lo);
+     if(active.length){
+      const chosen=active[active.length-1].n;
+      const mark=document.createElement('mark');mark.className='reader-annotation-mark';
+      mark.style.backgroundColor=noteColors[chosen.color]||noteColors.comment;
+      mark.dataset.noteIDs=active.map(r=>r.n.id).join(' ');
+      mark.append(document.createTextNode(part));fragment.append(mark);
+     }else fragment.append(document.createTextNode(part));
+    }
+    textNode.replaceWith(fragment);
+   }
+   base=end;
+  }
+  const comments=available.filter(n=>n.hasComment);
+  if(comments.length){
+   const marker=document.createElement('button');marker.type='button';marker.className='reader-note-marker';
+   marker.title=comments.length+' 条批注';marker.setAttribute('aria-label',marker.title);
+   marker.setAttribute('data-note-ids',comments.map(n=>n.id).join(' '));
+   marker.textContent='';marker.dataset.count=String(comments.length);
+   marker.onclick=e=>{e.stopPropagation();post({kind:'annotationClicked',noteID:comments[0].id})};
+   p.classList.add('reader-note-anchor');p.append(marker);
+  }
+ }
+ annotatedParagraphs=new Set(byParagraph.keys());
+}
+function jumpToAnnotation(id,paragraphID){
+ const p=nodes[paragraphID];if(!p)return false;
+ const mark=Array.from(p.querySelectorAll('mark.reader-annotation-mark')).find(m=>m.dataset.noteIDs.split(' ').includes(id));
+ const target=mark||p;target.scrollIntoView({block:'center',behavior:'auto'});
+ target.classList.add('reader-note-target');setTimeout(()=>target.classList.remove('reader-note-target'),1200);
+ reportReadingPosition();
+ return true;
 }
 let positionReady=false, positionTimer;
 function reportReadingPosition(){

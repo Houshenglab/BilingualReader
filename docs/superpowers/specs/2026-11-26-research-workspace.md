@@ -1,0 +1,7 @@
+# Research workspace 0.8.0
+
+Approved direction: add selected-text colors, inline comments, per-document notebook and configurable AI literature chat. Retain the original PDF layout, inline Word translations, text mode and existing bookshelf/category organization. Keep original documents unchanged.
+
+Approach: a single switchable research side panel (translation / notes / AI) keeps the document wide; a persistent book-scoped notebook is separate from translation cache. Native selection yields exact text and location (PDF line rectangles, Word and text UTF-16 offsets); comments and highlights can be recalled and edited. A text selection toolbar offers colors, comment and AI. A separate notebook stores free-form notes and AI excerpts and exports Markdown. The alternative of three concurrent fixed panes would compress the page; a modal chat would interrupt reading. Use native SwiftUI/AppKit and restrained teal, system colors, clear labels and keyboard access; preserve dark mode and reduced motion.
+
+AI uses a user-configured compatible chat endpoint/model and Keychain secret, with explicit user send, conversation history scoped to the book, context size/coverage disclosure, error/cancel controls, and no API traffic before send. Original article text is sent only on explicit request. Long articles may use limited context identified in the interface. No external accounts bundled. Preserve macOS 13 and arm64 deployment.

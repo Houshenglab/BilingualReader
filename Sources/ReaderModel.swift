@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import PDFKit
 import UniformTypeIdentifiers
+import Combine
 
 enum PDFReadingMode: String, CaseIterable, Identifiable {
     case original = "原页模式"
@@ -32,6 +33,9 @@ final class ReaderModel: ObservableObject {
     @Published var cacheCount = 0
     @Published var cacheBytes: Int64 = 0
     @Published var clearingCache = false
+    let notebook: ResearchNotebook
+    let researchAI: ResearchAI
+    private var researchSubscriptions = Set<AnyCancellable>()
     let translator: WebTranslator
     let library: LibraryStore?
     @Published var libraryBooks: [LibraryBook] = []
@@ -51,8 +55,11 @@ final class ReaderModel: ObservableObject {
     var saveTask: Task<Void, Never>?
     var saveDebounce: Task<Void, Never>?
     var restoringSession = false
-    init(translator: WebTranslator = WebTranslator(), library: LibraryStore? = nil) {
+    init(translator: WebTranslator = WebTranslator(), library: LibraryStore? = nil, notebook: ResearchNotebook? = nil, researchAI: ResearchAI? = nil) {
         self.translator = translator; self.library = library
+        self.notebook = notebook ?? ResearchNotebook()
+        self.researchAI = researchAI ?? ResearchAI()
+        self.notebook.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &researchSubscriptions)
         if library != nil {
             if let saved = UserDefaults.standard.string(forKey: "libraryEngine"), let engine = TranslationEngine(rawValue: saved) { self.engine = engine }
             Task { await refreshLibrary() }
@@ -77,6 +84,10 @@ final class ReaderModel: ObservableObject {
         }
     }
 
+    func openResearch(bookID: String?) {
+        notebook.open(bookID: bookID)
+        researchAI.open(bookID: bookID)
+    }
     func chooseFile() {
         if let existing = openPanel, existing.isVisible { existing.makeKeyAndOrderFront(nil); return }
         openPanel?.close()
@@ -112,6 +123,7 @@ final class ReaderModel: ObservableObject {
                 paragraphs = values
                 documentReady = url.pathExtension.lowercased() != "docx"
                 documentID = UUID()
+                openResearch(bookID: "file:" + url.standardizedFileURL.path)
                 documentURL = url
                 importing = false
                 status = "\(values.count) 段 · 点击英文下方的「展开中文」"
@@ -138,6 +150,7 @@ final class ReaderModel: ObservableObject {
         enqueue(id)
     }
     func mergePDFParagraph(_ direction: Int) {
+        guard !notebook.notes.contains(where: { $0.anchor?.paragraphID != nil }) else { alert = "为保持已有高亮和批注的准确位置，请勿在已有段落批注后重新合并段落。"; return }
         guard let id = selectedPDFParagraph else { return }
         let ids = readingParagraphs.map(\.id)
         guard let index = ids.firstIndex(of: id), ids.indices.contains(index + direction) else { return }
@@ -149,6 +162,7 @@ final class ReaderModel: ObservableObject {
         if let selectedPDFParagraph { enqueue(selectedPDFParagraph) }
     }
     func undoPDFMerge() {
+        guard !notebook.notes.contains(where: { $0.anchor?.paragraphID != nil }) else { alert = "为保持已有高亮和批注的准确位置，暂不能撤销段落合并。"; return }
         guard let backup = pdfMergeBackup else { return }
         stop()
         paragraphs = backup.paragraphs

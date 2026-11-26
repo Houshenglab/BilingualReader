@@ -111,6 +111,7 @@ extension ReaderModel {
                 guard importGeneration == version else { return }
                 restoringSession = true
                 currentBookID = book.id
+                openResearch(bookID: book.id)
                 documentURL = url; documentID = UUID()
                 var clean = values
                 for i in clean.indices {
@@ -177,6 +178,7 @@ extension ReaderModel {
         importing = false
         stop()
         showingLibrary = true
+        openResearch(bookID: nil)
         Task { await saveTask?.value; await refreshLibrary() }
     }
     func scheduleLibrarySave() {

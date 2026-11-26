@@ -17,8 +17,8 @@ struct LibraryView: View {
             HStack(spacing: 20) {
                 Image(systemName: "books.vertical").font(.title2).foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("我的书架").font(.system(size: 20, weight: .semibold))
-                    Text("\(model.libraryBooks.count) 份文档 · 随时继续阅读").font(.caption).foregroundStyle(.secondary)
+                    Text("文献书架").font(.system(size: 20, weight: .semibold))
+                    Text("\(model.libraryBooks.count) 份文档 · 阅读、批注与理解").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 TextField("搜索书名或文档", text: $query).textFieldStyle(.roundedBorder).frame(width: 210)
@@ -123,7 +123,7 @@ struct LibraryView: View {
             Divider()
             HStack(spacing: 10) {
                 if model.libraryBusy { ProgressView().controlSize(.small) }
-                Text(model.libraryStatus.isEmpty ? "文档保存在本机 · 阅读位置自动记住" : model.libraryStatus)
+                Text(model.libraryStatus.isEmpty ? "文档与笔记保存在本机 · 阅读位置自动记住" : model.libraryStatus)
                 Spacer()
                 Text("PDF · WORD · TXT").tracking(1)
             }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)

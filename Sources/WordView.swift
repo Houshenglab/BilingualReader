@@ -33,6 +33,8 @@ struct WordView: NSViewRepresentable {
         var previous: [Int: String] = [:]
         var lastAutomatic: Bool?
         var lastZoom: Double?
+        var lastNotes: [ResearchNote]?
+        var lastJump: UUID?
         init(model: ReaderModel, url: URL) { self.model = model; self.url = url; self.documentID = model.documentID }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task {
@@ -54,6 +56,21 @@ struct WordView: NSViewRepresentable {
                 model.status = "Word 原文排版 · \(payload["tables"] ?? 0) 个表格 · 点击英文段落展开中文"
                 synchronize()
                 view?.callAsyncJavaScript("restoreReadingPosition(id);", arguments: ["id": model.readingParagraphID ?? 0], in: nil, in: .page, completionHandler: nil)
+            } else if ready, kind == "selection",
+                      let id = payload["id"] as? Int, model.paragraphs.indices.contains(id),
+                      let quote = payload["quote"] as? String,
+                      let location = payload["location"] as? Int, location >= 0,
+                      let length = payload["length"] as? Int, length > 0, length == quote.utf16.count {
+                model.notebook.selection = ResearchAnchor(paragraphID: id, quote: quote, rangeLocation: location, rangeLength: length)
+            } else if ready, kind == "selectionUnsupported" {
+                model.notebook.selection = nil
+                model.status = "请选择同一段落内的文字，便于准确保存高亮与批注"
+            } else if ready, kind == "selectionCleared" {
+                model.notebook.selection = nil
+            } else if ready, kind == "annotationClicked",
+                      let value = payload["noteID"] as? String, let noteID = UUID(uuidString: value),
+                      let note = model.notebook.notes.first(where: { $0.id == noteID }) {
+                model.notebook.beginEditing(note)
             } else if ready, let id = payload["id"] as? Int {
                 if kind == "position", model.paragraphs.indices.contains(id) { model.readingParagraphID = id }
                 if kind == "toggle" { model.toggle(id) }
@@ -63,7 +80,7 @@ struct WordView: NSViewRepresentable {
             }
         }
         func synchronize() {
-            guard ready, !cancelled else { return }
+            guard ready, !cancelled, model.documentID == documentID else { return }
             var changed: [[String: Any]] = []
             for p in model.paragraphs {
                 let signature = "\(p.expanded)|\(p.loading)|\(p.translation ?? "")|\(p.error ?? "")|\(p.activity ?? "")|\(model.isPaused)"
@@ -76,6 +93,33 @@ struct WordView: NSViewRepresentable {
                 lastAutomatic = model.autoTranslate
                 view?.callAsyncJavaScript("updateReader(states, automatic);", arguments: ["states": changed, "automatic": model.autoTranslate], in: nil, in: .page, completionHandler: nil)
             }
+            if lastNotes != model.notebook.notes {
+                lastNotes = model.notebook.notes
+                let notes: [[String: Any]] = model.notebook.notes.compactMap { note in
+                    guard let anchor = note.anchor, let id = anchor.paragraphID else { return nil }
+                    var result: [String: Any] = [
+                        "id": note.id.uuidString, "paragraphID": id, "quote": anchor.quote,
+                        "hasComment": !note.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                        "color": note.color?.rawValue ?? "comment"
+                    ]
+                    if let location = anchor.rangeLocation { result["location"] = location }
+                    if let length = anchor.rangeLength { result["length"] = length }
+                    return result
+                }
+                view?.callAsyncJavaScript("updateAnnotations(notes);", arguments: ["notes": notes], in: nil, in: .page, completionHandler: nil)
+            }
+            if let note = model.notebook.requestedJump, let id = note.anchor?.paragraphID {
+                if lastJump != note.id {
+                    lastJump = note.id
+                    view?.callAsyncJavaScript("return jumpToAnnotation(noteID, id);", arguments: ["noteID": note.id.uuidString, "id": id], in: nil, in: .page) { [weak self] result in
+                        guard let self, !self.cancelled, self.model.documentID == self.documentID,
+                              self.model.notebook.requestedJump?.id == note.id else { return }
+                        self.lastJump = nil
+                        self.model.notebook.requestedJump = nil
+                        if case .failure(let error) = result { self.model.alert = "无法定位批注：\(error.localizedDescription)" }
+                    }
+                }
+            } else { lastJump = nil }
             if lastZoom != model.fontSize {
                 lastZoom = model.fontSize
                 view?.callAsyncJavaScript("setZoom(zoom);", arguments: ["zoom": model.fontSize / 20], in: nil, in: .page, completionHandler: nil)
