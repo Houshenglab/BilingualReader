@@ -7,9 +7,9 @@ import Foundation
         self.request = request
         return try await withCheckedThrowingContinuation { continuation = $0 }
     }
-    func reply() {
+    func reply(_ json: String = #"{"choices":[{"message":{"content":"mock response"}}]}"#, status: Int = 200) {
         let url = request!.url!
-        continuation?.resume(returning: (Data(#"{"choices":[{"message":{"content":"mock response"}}]}"#.utf8), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!))
+        continuation?.resume(returning: (Data(json.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!))
         continuation = nil
     }
 }
@@ -83,6 +83,62 @@ import Foundation
         check(!ai.historyAvailable && ai.error != nil, "corrupt history is protected")
         ai.clear()
         check(try! String(contentsOf: store.file(bookID: "book/one"), encoding: .utf8) == "broken", "cannot overwrite corrupt history")
-        print("Research AI checks passed: context, endpoints, request/response, history isolation, mock send and cancellation.")
+        // Model discovery: use a GET request with the same endpoint-bound authorization and no document payload.
+        check(try! ResearchAIConfiguration.modelsEndpoint("https://example.com/v1/chat/completions/").absoluteString == "https://example.com/v1/models", "models sibling path")
+        check(try! ResearchAIConfiguration.modelsEndpoint("https://api.deepseek.com").absoluteString == "https://api.deepseek.com/models", "models root path")
+        check((try? ResearchAIConfiguration.modelsEndpoint("https://user:secret@example.com/v1")) == nil, "models rejects unsafe endpoint")
+        check(body["reasoning_effort"] == nil, "automatic effort omitted")
+        let official = try ResearchAIConfiguration.endpoint("https://api.openai.com/v1")
+        let reasoning = try ResearchAIRequest.make(endpoint: official, model: "gpt-6.2-astra", key: nil, title: "Test", context: selected, history: [], question: "question", effort: .xhigh)
+        let reasonBody = try JSONSerialization.jsonObject(with: reasoning.httpBody!) as! [String: Any]
+        check(reasonBody["reasoning_effort"] as? String == "xhigh", "explicit supported reasoning sent")
+        let unsupported = try ResearchAIRequest.make(endpoint: endpoint, model: "gpt-6.2-astra", key: nil, title: "Test", context: selected, history: [], question: "question", effort: .high)
+        check((try! JSONSerialization.jsonObject(with: unsupported.httpBody!) as! [String: Any])["reasoning_effort"] == nil, "unsupported provider effort omitted")
+        let separateDefaults = UserDefaults(suiteName: "research-model-checks-" + UUID().uuidString)!
+        separateDefaults.register(defaults: ["researchAI.baseURL": "https://api.openai.com/v1", "researchAI.model": "gpt-6.2-astra"])
+        let choices = ResearchAI(root: root, defaults: separateDefaults, transport: { try await mock.transport($0) }, readCredential: { url in url == official ? "saved-key" : nil })
+        check(choices.efforts(for: "gpt-6.2-astra", base: choices.baseURL).contains(.max), "known model capability")
+        check(!choices.efforts(for: "gpt-6.2-astra", base: choices.baseURL).contains(.none), "does not offer unsupported none")
+        check(choices.efforts(for: "gpt-6-sol", base: choices.baseURL).contains(.none), "older GPT-6 Sol permits none")
+        check(choices.efforts(for: "gpt-5-mini", base: choices.baseURL).contains(.minimal), "GPT-5 mini permits minimal")
+        check(choices.efforts(for: "gpt-5.6-luna", base: choices.baseURL).contains(.max), "GPT-5.6 Luna permits max")
+        check(choices.efforts(for: "gpt-6.2-astra", base: "https://other.example/v1") == [.automatic], "does not infer capabilities from untrusted provider name")
+        choices.selectEffort(.high)
+        check(choices.effort == .high, "select supported effort")
+        let restarted = ResearchAI(root: root, defaults: separateDefaults, transport: { try await mock.transport($0) }, readCredential: { _ in nil })
+        check(restarted.effort == .high, "effort persisted")
+        choices.selectModel("gpt-4o")
+        check(choices.effort == .automatic, "unsupported effort reset after switching")
+        choices.selectModel("gpt-6.2-astra")
+        check(choices.effort == .high, "restore model-specific effort")
+        let load = Task { await choices.loadModels(base: choices.baseURL) }
+        try await waitUntil { mock.continuation != nil }
+        check(choices.loadingModels, "discovery loading state")
+        check(mock.request?.httpMethod == "GET" && mock.request?.httpBody == nil && mock.request?.url?.absoluteString == "https://api.openai.com/v1/models", "discovery request")
+        check(mock.request?.value(forHTTPHeaderField: "Authorization") == "Bearer saved-key", "endpoint-bound saved key")
+        mock.reply(#"{"data":[{"id":"gpt-5-mini"},{"id":"gpt-6.2-astra"},{"id":"gpt-5-mini"},{"id":"  "}]}"#)
+        await load.value
+        check(!choices.loadingModels && choices.modelsError == nil && choices.models(for: choices.baseURL).map(\.id) == ["gpt-5-mini", "gpt-6.2-astra"], "parse, filter, dedupe, sort models")
+        check(choices.models(for: "https://other.example/v1").isEmpty, "provider model list isolation")
+        let temporary = Task { await choices.loadModels(base: "https://other.example/v1", key: "typed-key", useSavedKey: false) }
+        try await waitUntil { mock.continuation != nil }
+        check(mock.request?.value(forHTTPHeaderField: "Authorization") == "Bearer typed-key", "typed key overrides saved key")
+        mock.reply(#"{"data":[{"id":"other","name":"Other","effort":{"supported_levels":["low","high","nonsense"]}}]}"#)
+        await temporary.value
+        check(choices.efforts(for: "other", base: "https://other.example/v1") == [.automatic, .low, .high], "provider capability metadata")
+        let failure = Task { await choices.loadModels(base: "https://other.example/v1", useSavedKey: false) }
+        try await waitUntil { mock.continuation != nil }
+        check(mock.request?.value(forHTTPHeaderField: "Authorization") == nil, "no credential sent when explicitly disabled")
+        mock.reply("{}", status: 401)
+        await failure.value
+        check(choices.modelsError != nil && !choices.loadingModels, "discovery error state")
+        check(choices.models(for: "https://other.example/v1").isEmpty, "different credentials do not retain prior model list")
+        let stale = Task { await choices.loadModels(base: "https://stale.example/v1") }
+        try await waitUntil { mock.continuation != nil }
+        choices.cancelModelLoading()
+        mock.reply(#"{"data":[{"id":"stale"}]}"#)
+        await stale.value
+        check(choices.models(for: "https://stale.example/v1").isEmpty && !choices.loadingModels, "cancelled model list ignored")
+        print("Research AI checks passed: model discovery, credential isolation, model-specific reasoning, persistence, history and cancellation.")
     }
 }

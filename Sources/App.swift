@@ -402,7 +402,7 @@ struct ReaderSettings: View {
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("本机缓存", systemImage: "internaldrive") }
                 Section {
-                    LabeledContent("双语阅读", value: "0.8.1")
+                    LabeledContent("双语阅读", value: "0.8.2")
                     Text("文档与笔记在本机保存。翻译或主动发送 AI 提问时，所选文字会发送至配置的服务。")
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Label("关于", systemImage: "book.closed") }

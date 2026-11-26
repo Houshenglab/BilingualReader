@@ -24,6 +24,142 @@ struct ResearchAIConfiguration {
         guard let endpoint = parts.url else { throw ResearchAIError("API 地址无效。") }
         return endpoint
     }
+    static func modelsEndpoint(_ base: String) throws -> URL {
+        let chatEndpoint = try endpoint(base)
+        guard var parts = URLComponents(url: chatEndpoint, resolvingAgainstBaseURL: false) else {
+            throw ResearchAIError("API 地址无效。")
+        }
+        parts.path = String(parts.path.dropLast("/chat/completions".count)) + "/models"
+        guard let url = parts.url else { throw ResearchAIError("模型列表地址无效。") }
+        return url
+    }
+}
+
+enum ResearchReasoningEffort: String, CaseIterable, Identifiable {
+    case automatic = "auto", none, minimal, low, medium, high, xhigh, max
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .automatic: return "服务默认"
+        case .none: return "关闭推理"
+        case .minimal: return "极低"
+        case .low: return "低"
+        case .medium: return "中"
+        case .high: return "高"
+        case .xhigh: return "超高"
+        case .max: return "最高"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .automatic: return "沿用模型默认推理设置"
+        case .none: return "直接回答，优先速度"
+        case .minimal: return "最少推理，适合简单提取"
+        case .low: return "快速处理常规问题"
+        case .medium: return "平衡深度与响应速度"
+        case .high: return "深入分析复杂文献"
+        case .xhigh: return "更充分的推理，通常耗时更长"
+        case .max: return "最高推理强度，可能使用更多时间和额度"
+        }
+    }
+    var level: Int {
+        switch self {
+        case .automatic, .none: return 0
+        case .minimal, .low: return 1
+        case .medium: return 2
+        case .high: return 3
+        case .xhigh: return 4
+        case .max: return 5
+        }
+    }
+}
+
+struct ResearchAIModel: Codable, Identifiable, Equatable {
+    struct EffortMetadata: Codable, Equatable {
+        let supportedLevels: [String]
+        enum CodingKeys: String, CodingKey { case supportedLevels = "supported_levels" }
+    }
+    let id: String
+    var name: String? = nil
+    var effort: EffortMetadata? = nil
+
+    enum CodingKeys: CodingKey { case id, name, effort }
+    init(id: String, name: String? = nil, effort: EffortMetadata? = nil) {
+        self.id = id; self.name = name; self.effort = effort
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try? values.decode(String.self, forKey: .name)
+        effort = try? values.decode(EffortMetadata.self, forKey: .effort)
+    }
+}
+
+enum ResearchAIModelRequest {
+    static func make(base: String, key: String?) throws -> URLRequest {
+        var request = URLRequest(url: try ResearchAIConfiguration.modelsEndpoint(base), timeoutInterval: 25)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let key, !key.isEmpty {
+            guard !key.contains("\r"), !key.contains("\n") else { throw ResearchAIError("API 密钥不能包含换行。") }
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+    static func parse(_ data: Data) throws -> [ResearchAIModel] {
+        struct Response: Decodable { let data: [ResearchAIModel] }
+        guard let result = try? JSONDecoder().decode(Response.self, from: data) else {
+            throw ResearchAIError("服务没有返回标准模型列表。你仍可手动填写模型名称。")
+        }
+        var seen = Set<String>()
+        return result.data.compactMap { item -> ResearchAIModel? in
+            let id = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty, !id.contains("\n"), !id.contains("\r"), seen.insert(id).inserted else { return nil }
+            return ResearchAIModel(id: id, name: item.name, effort: item.effort)
+        }.sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
+    static func efforts(endpoint: URL, model: String, metadata: ResearchAIModel? = nil) -> [ResearchReasoningEffort] {
+        let host = endpoint.host?.lowercased()
+        let id = model.lowercased()
+        // Only infer documented capabilities for the official provider and exact model families.
+        // Dated snapshots are accepted; arbitrary suffixes like "-chat" or "-pro" may be different APIs.
+        func matches(_ family: String) -> Bool {
+            if id == family { return true }
+            guard id.hasPrefix(family + "-") else { return false }
+            let suffix = String(id.dropFirst(family.count + 1))
+            return suffix.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+        }
+        var known: [ResearchReasoningEffort] = []
+        if host == "api.openai.com" {
+            if ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6-astra"].contains(where: matches) {
+                known = [.low, .medium, .high, .xhigh, .max]
+            } else if ["gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].contains(where: matches) {
+                known = [.none, .low, .medium, .high, .xhigh, .max]
+            } else if ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.5", "gpt-5.2"].contains(where: matches) {
+                known = [.none, .low, .medium, .high, .xhigh]
+            } else if matches("gpt-5.1") {
+                known = [.none, .low, .medium, .high]
+            } else if ["gpt-5", "gpt-5-mini", "gpt-5-nano"].contains(where: matches) {
+                known = [.minimal, .low, .medium, .high]
+            } else if ["o3", "o3-mini", "o4-mini"].contains(where: matches) {
+                known = [.low, .medium, .high]
+            }
+        } else if host == "api.deepseek.com" && ["deepseek-flash", "deepseek-v4-pro"].contains(id) {
+            known = [.none, .low, .high, .max]
+        }
+        if let metadata, metadata.id == model, let levels = metadata.effort?.supportedLevels {
+            let declared = levels.compactMap(ResearchReasoningEffort.init(rawValue:)).filter { $0 != .automatic }
+            // DeepSeek's effort metadata describes thinking-enabled levels; its official API also documents none.
+            if host == "api.deepseek.com", known.contains(ResearchReasoningEffort.none) {
+                known = [.none] + declared
+            } else if !known.isEmpty {
+                known = known.filter { declared.contains($0) }
+            } else {
+                known = declared
+            }
+        }
+        return [.automatic] + ResearchReasoningEffort.allCases.filter { $0 != .automatic && known.contains($0) }
+    }
 }
 
 /// Each endpoint has its own Keychain entry, so switching providers never reuses another provider's key.
@@ -109,7 +245,7 @@ struct ResearchAIContext {
 enum ResearchAIRequest {
     static let questionLimit = 8_000
     static let historyLimit = 16_000
-    static func make(endpoint: URL, model: String, key: String?, title: String, context: ResearchAIContext, history: [ResearchAIMessage], question: String) throws -> URLRequest {
+    static func make(endpoint: URL, model: String, key: String?, title: String, context: ResearchAIContext, history: [ResearchAIMessage], question: String, effort: ResearchReasoningEffort = .automatic, modelMetadata: ResearchAIModel? = nil) throws -> URLRequest {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= questionLimit else { throw ResearchAIError("请输入 1–\(questionLimit) 字符的提问。") }
         let cleanModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,12 +267,16 @@ enum ResearchAIRequest {
         messages.append(contentsOf: retained)
         let source = context.text.isEmpty ? "" : "\n\n文献：\(String(title.prefix(500)))\n本轮资料范围：\(context.label)\n<document>\n\(context.text)\n</document>"
         messages.append(["role": "user", "content": "用户提问：\(trimmed)\n\n本轮范围：\(context.label)" + source])
-        var request = URLRequest(url: endpoint, timeoutInterval: 120)
+        let supported = ResearchAIModelRequest.efforts(endpoint: endpoint, model: cleanModel, metadata: modelMetadata)
+        let selectedEffort = supported.contains(effort) ? effort : .automatic
+        var request = URLRequest(url: endpoint, timeoutInterval: selectedEffort.level >= 3 ? 240 : 120)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let key, !key.isEmpty { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["model": cleanModel, "messages": messages, "stream": false])
+        var payload: [String: Any] = ["model": cleanModel, "messages": messages, "stream": false]
+        if selectedEffort != .automatic { payload["reasoning_effort"] = selectedEffort.rawValue }
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         return request
     }
     static func parse(_ data: Data) throws -> String {
@@ -189,6 +329,10 @@ private final class ResearchAIRedirectPolicy: NSObject, URLSessionTaskDelegate {
     @Published var error: String?
     @Published private(set) var baseURL: String
     @Published private(set) var model: String
+    @Published private(set) var models: [ResearchAIModel] = []
+    @Published private(set) var loadingModels = false
+    @Published private(set) var modelsError: String?
+    @Published private(set) var effort: ResearchReasoningEffort = .automatic
     @Published var question = ""
     @Published var scope: ResearchAIScope = .document
     private(set) var bookID: String?
@@ -199,6 +343,13 @@ private final class ResearchAIRedirectPolicy: NSObject, URLSessionTaskDelegate {
     private let readCredential: (URL) -> String?
     private var work: Task<Void, Never>?
     private var generation = UUID()
+    private var modelsByEndpoint: [URL: [ResearchAIModel]] = [:]
+    // Keep only an in-memory digest of the authorization used to obtain the catalog.
+    // This prevents a refresh or key replacement from displaying a different account's catalog.
+    private var modelCredentials: [URL: String] = [:]
+    private var modelListEndpoint: URL?
+    private var modelLoadGeneration = UUID()
+    private var modelWork: Task<(Data, URLResponse), Error>?
 
     init(root: URL = ResearchAIHistory.defaultRoot, defaults: UserDefaults = .standard, transport: ((URLRequest) async throws -> (Data, URLResponse))? = nil, readCredential: @escaping (URL) -> String? = ResearchAICredentials.read) {
         self.store = ResearchAIHistory(root: root); self.defaults = defaults; self.readCredential = readCredential
@@ -207,26 +358,147 @@ private final class ResearchAIRedirectPolicy: NSObject, URLSessionTaskDelegate {
         self.transport = transport ?? { request in
             let configuration = URLSessionConfiguration.ephemeral
             configuration.timeoutIntervalForRequest = 120
-            configuration.timeoutIntervalForResource = 180
+            configuration.timeoutIntervalForResource = 300
             let session = URLSession(configuration: configuration, delegate: ResearchAIRedirectPolicy(), delegateQueue: nil)
             defer { session.finishTasksAndInvalidate() }
             return try await session.data(for: request)
         }
+        restoreEffort()
     }
     var configured: Bool { (try? ResearchAIConfiguration.endpoint(baseURL)) != nil && !model.isEmpty }
-    func configure(base: String, model: String, key: String, removeKey: Bool = false) throws {
+    func configure(base: String, model: String, key: String, removeKey: Bool = false, effort: ResearchReasoningEffort? = nil) throws {
+        guard !busy else { throw ResearchAIError("请先停止正在进行的 AI 对话。") }
         let endpoint = try ResearchAIConfiguration.endpoint(base)
         let clean = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { throw ResearchAIError("请输入模型名称。") }
         let cleanKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanKey.contains("\r"), !cleanKey.contains("\n") else { throw ResearchAIError("API 密钥不能包含换行。") }
-        if removeKey { try ResearchAICredentials.remove(endpoint) }
-        else if !cleanKey.isEmpty { try ResearchAICredentials.save(cleanKey, endpoint: endpoint) }
+        if removeKey {
+            try ResearchAICredentials.remove(endpoint)
+            invalidateModels(for: base)
+        } else if !cleanKey.isEmpty {
+            try ResearchAICredentials.save(cleanKey, endpoint: endpoint)
+            if let fingerprint = modelCredentials[endpoint], fingerprint != credentialFingerprint(cleanKey) {
+                invalidateModels(for: base)
+            }
+        }
+        cancelModelLoading()
         baseURL = base.trimmingCharacters(in: .whitespacesAndNewlines)
         self.model = clean
         defaults.set(baseURL, forKey: "researchAI.baseURL")
         defaults.set(clean, forKey: "researchAI.model")
+        modelListEndpoint = endpoint
+        models = modelsByEndpoint[endpoint] ?? []
+        restoreEffort()
+        if let effort { selectEffort(effort) }
         error = nil
+    }
+    func hasSavedCredential(base: String) -> Bool {
+        guard let endpoint = try? ResearchAIConfiguration.endpoint(base) else { return false }
+        return readCredential(endpoint)?.isEmpty == false
+    }
+    func models(for base: String) -> [ResearchAIModel] {
+        guard let endpoint = try? ResearchAIConfiguration.endpoint(base) else { return [] }
+        return modelsByEndpoint[endpoint] ?? []
+    }
+    func efforts(for model: String, base: String) -> [ResearchReasoningEffort] {
+        guard let endpoint = try? ResearchAIConfiguration.endpoint(base) else { return [.automatic] }
+        return ResearchAIModelRequest.efforts(endpoint: endpoint, model: model, metadata: modelsByEndpoint[endpoint]?.first { $0.id == model })
+    }
+    private func effortKey(endpoint: URL, model: String) -> String {
+        let digest = SHA256.hash(data: Data((endpoint.absoluteString + "\n" + model).utf8)).map { String(format: "%02x", $0) }.joined()
+        return "researchAI.effort." + digest
+    }
+    private func restoreEffort() {
+        guard let endpoint = try? ResearchAIConfiguration.endpoint(baseURL) else { effort = .automatic; return }
+        let saved = defaults.string(forKey: effortKey(endpoint: endpoint, model: model)).flatMap(ResearchReasoningEffort.init(rawValue:)) ?? .automatic
+        effort = efforts(for: model, base: baseURL).contains(saved) ? saved : .automatic
+    }
+    func selectModel(_ id: String) {
+        let clean = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !busy, !clean.isEmpty, configured, clean != model else { return }
+        model = clean
+        defaults.set(clean, forKey: "researchAI.model")
+        restoreEffort()
+    }
+    func selectEffort(_ value: ResearchReasoningEffort) {
+        guard !busy, let endpoint = try? ResearchAIConfiguration.endpoint(baseURL), !model.isEmpty else { return }
+        let selected = efforts(for: model, base: baseURL).contains(value) ? value : .automatic
+        effort = selected
+        defaults.set(selected.rawValue, forKey: effortKey(endpoint: endpoint, model: model))
+    }
+    func cancelModelLoading() {
+        modelLoadGeneration = UUID()
+        modelWork?.cancel()
+        modelWork = nil
+        loadingModels = false
+        modelsError = nil
+    }
+    private func credentialFingerprint(_ key: String?) -> String {
+        SHA256.hash(data: Data((key ?? "").utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    func invalidateModels(for base: String) {
+        cancelModelLoading()
+        guard let endpoint = try? ResearchAIConfiguration.endpoint(base) else { return }
+        modelsByEndpoint.removeValue(forKey: endpoint)
+        modelCredentials.removeValue(forKey: endpoint)
+        if modelListEndpoint == endpoint { models = [] }
+        if (try? ResearchAIConfiguration.endpoint(baseURL)) == endpoint { restoreEffort() }
+    }
+    func loadModels(base: String, key: String = "", useSavedKey: Bool = true) async {
+        cancelModelLoading()
+        let endpoint: URL
+        let request: URLRequest
+        let fingerprint: String
+        do {
+            endpoint = try ResearchAIConfiguration.endpoint(base)
+            let typed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            let credential = !typed.isEmpty ? typed : (useSavedKey ? readCredential(endpoint) : nil)
+            fingerprint = credentialFingerprint(credential)
+            request = try ResearchAIModelRequest.make(base: base, key: credential)
+        } catch {
+            modelsError = (error as? ResearchAIError)?.message ?? "无法创建模型列表请求。"
+            return
+        }
+        if let previous = modelCredentials[endpoint], previous != fingerprint { invalidateModels(for: base) }
+        let token = UUID()
+        modelLoadGeneration = token
+        modelListEndpoint = endpoint
+        models = modelsByEndpoint[endpoint] ?? []
+        loadingModels = true
+        let transport = self.transport
+        let work = Task { try await transport(request) }
+        modelWork = work
+        defer {
+            if modelLoadGeneration == token {
+                modelWork = nil
+                loadingModels = false
+            }
+        }
+        do {
+            let (data, response) = try await withTaskCancellationHandler(operation: { try await work.value }, onCancel: { work.cancel() })
+            guard modelLoadGeneration == token, !Task.isCancelled else { return }
+            guard let http = response as? HTTPURLResponse else { throw ResearchAIError("服务没有返回 HTTP 响应。") }
+            switch http.statusCode {
+            case 200...299: break
+            case 401, 403: throw ResearchAIError("API 密钥未通过验证或权限不足（\(http.statusCode)）。")
+            case 404, 405: throw ResearchAIError("该服务不提供模型列表。请手动输入模型名称。")
+            case 429: throw ResearchAIError("模型列表请求暂时受限（429），请稍后重试。")
+            case 300...399: throw ResearchAIError("API 地址返回重定向。请填写最终 API 地址。")
+            default: throw ResearchAIError("获取模型列表失败（HTTP \(http.statusCode)）。")
+            }
+            let result = try ResearchAIModelRequest.parse(data)
+            modelsByEndpoint[endpoint] = result
+            modelCredentials[endpoint] = fingerprint
+            models = result
+            if (try? ResearchAIConfiguration.endpoint(baseURL)) == endpoint { restoreEffort() }
+            if result.isEmpty { modelsError = "服务没有返回可用模型。你仍可手动填写模型名称。" }
+        } catch {
+            guard modelLoadGeneration == token, !Task.isCancelled else { return }
+            if let error = error as? ResearchAIError { modelsError = error.message }
+            else if let error = error as? URLError, error.code == .timedOut { modelsError = "获取模型列表超时，请稍后重试。" }
+            else { modelsError = "无法连接模型列表。请检查 API 地址、网络和服务状态。" }
+        }
     }
     func open(bookID: String?) {
         guard self.bookID != bookID else { return }
@@ -255,7 +527,7 @@ private final class ResearchAIRedirectPolicy: NSObject, URLSessionTaskDelegate {
         do {
             let endpoint = try ResearchAIConfiguration.endpoint(baseURL)
             let clean = question.trimmingCharacters(in: .whitespacesAndNewlines)
-            let request = try ResearchAIRequest.make(endpoint: endpoint, model: model, key: readCredential(endpoint), title: title, context: context, history: messages, question: clean)
+            let request = try ResearchAIRequest.make(endpoint: endpoint, model: model, key: readCredential(endpoint), title: title, context: context, history: messages, question: clean, effort: effort, modelMetadata: modelsByEndpoint[endpoint]?.first { $0.id == model })
             let user = ResearchAIMessage(role: .user, text: clean, contextLabel: context.label, selectedExcerpt: scope == .selection ? String(context.text.prefix(4_000)) : nil)
             let updated = messages + [user]
             if let bookID { try store.save(updated, bookID: bookID) }
