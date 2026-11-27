@@ -274,13 +274,13 @@ struct PDFTranslationPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Text("段落译文").font(.system(size: 14, weight: .semibold))
+                Text(L("段落译文", "Paragraph translation")).font(.system(size: 14, weight: .semibold))
                 Spacer()
                 Button { model.movePDFParagraph(-1) } label: { Image(systemName: "chevron.up") }
-                    .help("上一段").accessibilityLabel("上一段")
+                    .help(L("上一段", "Previous paragraph")).accessibilityLabel(L("上一段", "Previous paragraph"))
                     .disabled(selected == nil || selected?.id == model.readingParagraphs.first?.id)
                 Button { model.movePDFParagraph(1) } label: { Image(systemName: "chevron.down") }
-                    .help("下一段").accessibilityLabel("下一段")
+                    .help(L("下一段", "Next paragraph")).accessibilityLabel(L("下一段", "Next paragraph"))
                     .disabled(selected == nil || selected?.id == model.readingParagraphs.last?.id)
             }.buttonStyle(.borderless).padding(24)
             Divider()
@@ -288,34 +288,34 @@ struct PDFTranslationPanel: View {
                 VStack(alignment: .leading, spacing: 16) {
                     if model.preparingPDF {
                         ProgressView().controlSize(.small)
-                        Text("正在准备段落翻译").font(.title3)
-                        Text("你可以先阅读、翻动左侧原页。完成后即可点击英文段落翻译。").foregroundStyle(.secondary)
+                        Text(L("正在准备段落翻译", "Preparing paragraph translations")).font(.title3)
+                        Text(L("你可以先阅读、翻动左侧原页。完成后即可点击英文段落翻译。", "You can read and navigate the original pages while preparation runs. Click paragraphs to translate once ready.")).foregroundStyle(.secondary)
                     } else {
                         Image(systemName: "doc.text.magnifyingglass").font(.title)
-                        Text("段落分析未完成").font(.title3)
-                        Text(model.pdfPreparationError ?? "请重试段落分析，原页仍可阅读。").foregroundStyle(.secondary)
-                        Button("重新分析") { model.preparePDFLayout() }.buttonStyle(.borderedProminent)
+                        Text(L("段落分析未完成", "Paragraph analysis incomplete")).font(.title3)
+                        Text(model.pdfPreparationError ?? L("请重试段落分析，原页仍可阅读。", "Try analyzing again. The original pages remain available.")).foregroundStyle(.secondary)
+                        Button(L("重新分析", "Analyze again")) { model.preparePDFLayout() }.buttonStyle(.borderedProminent)
                     }
                 }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else if let paragraph = selected {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         HStack {
-                            Text("第 \(Array(Set(paragraph.sourceRegions.map(\.page))).sorted().map(String.init).joined(separator: "、")) 页 · 段落 \(paragraph.id + 1)")
+                            Text(L("第 \(Array(Set(paragraph.sourceRegions.map(\.page))).sorted().map(String.init).joined(separator: "、")) 页 · 段落 \(paragraph.id + 1)", "Page(s) \(Array(Set(paragraph.sourceRegions.map(\.page))).sorted().map(String.init).joined(separator: ", ")) · Paragraph \(paragraph.id + 1)"))
                                 .font(.caption).foregroundStyle(.secondary)
                             Spacer()
                             Menu {
-                                Button("与上一段合并") { model.mergePDFParagraph(-1) }
+                                Button(L("与上一段合并", "Merge with previous paragraph")) { model.mergePDFParagraph(-1) }
                                     .disabled(paragraph.id == model.readingParagraphs.first?.id)
-                                Button("与下一段合并") { model.mergePDFParagraph(1) }
+                                Button(L("与下一段合并", "Merge with next paragraph")) { model.mergePDFParagraph(1) }
                                     .disabled(paragraph.id == model.readingParagraphs.last?.id)
-                                if model.pdfMergeBackup != nil { Button("撤销上次合并") { model.undoPDFMerge() } }
+                                if model.pdfMergeBackup != nil { Button(L("撤销上次合并", "Undo last merge")) { model.undoPDFMerge() } }
                             } label: { Image(systemName: "ellipsis.circle") }
-                                .menuStyle(.borderlessButton).fixedSize().help("调整段落范围").accessibilityLabel("调整段落")
+                                .menuStyle(.borderlessButton).fixedSize().help(L("调整段落范围", "Adjust paragraph boundaries")).accessibilityLabel(L("调整段落", "Adjust paragraph"))
                         }
                         TranslationResult(model: model, paragraph: paragraph)
                         Divider()
-                        DisclosureGroup("英文原文") {
+                        DisclosureGroup(L("英文原文", "English original")) {
                             Text(paragraph.text).font(.system(size: 16, design: .serif)).lineSpacing(8)
                                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                                 .padding(.top, 12)
@@ -325,10 +325,10 @@ struct PDFTranslationPanel: View {
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     Image(systemName: "text.cursor").font(.system(size: 32, weight: .light)).foregroundStyle(Color.accentColor)
-                    Text("从一段开始").font(.system(size: 24, weight: .medium))
-                    Text("点击左侧英文段落，\n在这里阅读对应中文。")
+                    Text(L("从一段开始", "Start with a paragraph")).font(.system(size: 24, weight: .medium))
+                    Text(L("点击左侧英文段落，\n在这里阅读对应中文。", "Click an English paragraph on the left\nto read its translation here."))
                         .font(.system(size: 16)).lineSpacing(8).foregroundStyle(.secondary)
-                    Text("图表与公式保留在原页。")
+                    Text(L("图表与公式保留在原页。", "Figures and equations stay on the original pages."))
                         .font(.caption).foregroundStyle(.tertiary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(32).padding(.top, 48)

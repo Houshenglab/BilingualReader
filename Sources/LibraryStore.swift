@@ -56,9 +56,9 @@ actor LibraryStore {
         if FileManager.default.fileExists(atPath: index.path) {
             do {
                 let decoded = try JSONDecoder().decode([LibraryBook].self, from: Data(contentsOf: index))
-                guard decoded.allSatisfy({ $0.id.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil && !$0.fileName.contains("/") && !$0.fileName.contains("..") }) else { throw ReaderError.message("书库索引格式错误") }
+                guard decoded.allSatisfy({ $0.id.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil && !$0.fileName.contains("/") && !$0.fileName.contains("..") }) else { throw ReaderError.message(L("书库索引格式错误", "Invalid library index format.")) }
                 books = decoded
-            } catch { throw ReaderError.message("无法读取书库记录，原文件已保留。请备份书库后检查 index.json：\(error.localizedDescription)") }
+            } catch { throw ReaderError.message(L("无法读取书库记录，原文件已保留。请备份书库后检查 index.json：\(error.localizedDescription)", "Could not read library records. The original files are preserved. Back up the library and inspect index.json: \(error.localizedDescription)")) }
         } else { books = [] }
         return books!.sorted { $0.lastOpened > $1.lastOpened }
     }
@@ -76,10 +76,10 @@ actor LibraryStore {
             guard ids.count == result.categories.count,
                   result.categories.allSatisfy({ UUID(uuidString: $0.id) != nil && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
                   result.assignments.allSatisfy({ $0.key.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil && ids.contains($0.value) }) else {
-                throw ReaderError.message("分类数据格式错误")
+                throw ReaderError.message(L("分类数据格式错误", "Invalid category data format."))
             }
             return result
-        } catch { throw ReaderError.message("无法读取分类记录，已有文件已保留：\(error.localizedDescription)") }
+        } catch { throw ReaderError.message(L("无法读取分类记录，已有文件已保留：\(error.localizedDescription)", "Could not read categories. Existing files are preserved: \(error.localizedDescription)")) }
     }
     private func writeOrganization(_ value: LibraryOrganization) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -87,9 +87,9 @@ actor LibraryStore {
     }
     private func categoryName(_ input: String, in categories: [LibraryCategory], excluding id: String? = nil) throws -> String {
         let name = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 40 else { throw ReaderError.message("分类名称请输入 1–40 个字") }
-        guard !["全部", "未分类"].contains(name) else { throw ReaderError.message("请使用“全部”和“未分类”以外的名称") }
-        guard !categories.contains(where: { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame }) else { throw ReaderError.message("这个分类名称已经存在") }
+        guard !name.isEmpty, name.count <= 40 else { throw ReaderError.message(L("分类名称请输入 1–40 个字", "Enter a category name of 1–40 characters.")) }
+        guard !["全部", "未分类", "all", "uncategorized"].contains(name.lowercased()) else { throw ReaderError.message(L("请使用“全部”和“未分类”以外的名称", "Choose a name other than All or Uncategorized.")) }
+        guard !categories.contains(where: { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame }) else { throw ReaderError.message(L("这个分类名称已经存在", "A category with this name already exists.")) }
         return name
     }
     func createCategory(_ name: String) throws -> LibraryCategory {
@@ -101,7 +101,7 @@ actor LibraryStore {
     }
     func renameCategory(_ id: String, name: String) throws {
         var value = try organization()
-        guard let index = value.categories.firstIndex(where: { $0.id == id }) else { throw ReaderError.message("分类已不存在") }
+        guard let index = value.categories.firstIndex(where: { $0.id == id }) else { throw ReaderError.message(L("分类已不存在", "This category no longer exists.")) }
         value.categories[index].name = try categoryName(name, in: value.categories, excluding: id)
         try writeOrganization(value)
     }
@@ -113,16 +113,16 @@ actor LibraryStore {
     }
     func assignCategory(_ bookIDs: Set<String>, to categoryID: String?) throws {
         var value = try organization()
-        if let categoryID, !value.categories.contains(where: { $0.id == categoryID }) { throw ReaderError.message("目标分类已不存在") }
+        if let categoryID, !value.categories.contains(where: { $0.id == categoryID }) { throw ReaderError.message(L("目标分类已不存在", "The destination category no longer exists.")) }
         let existing = Set(try list().map(\.id))
-        guard bookIDs.isSubset(of: existing) else { throw ReaderError.message("部分文档已被移除，请刷新书架后重试") }
+        guard bookIDs.isSubset(of: existing) else { throw ReaderError.message(L("部分文档已被移除，请刷新书架后重试", "Some documents have been removed. Refresh the library and try again.")) }
         for id in bookIDs { value.assignments[id] = categoryID }
         try writeOrganization(value)
     }
     func importDocument(_ source: URL) throws -> LibraryBook {
         var values = try list()
         let ext = source.pathExtension.lowercased()
-        guard ["pdf", "docx", "txt"].contains(ext) else { throw ReaderError.message("请选择 PDF、DOCX 或 TXT 文件") }
+        guard ["pdf", "docx", "txt"].contains(ext) else { throw ReaderError.message(L("请选择 PDF、DOCX 或 TXT 文件", "Select a PDF, DOCX, or TXT file.")) }
         let access = source.startAccessingSecurityScopedResource()
         defer { if access { source.stopAccessingSecurityScopedResource() } }
         // Read remote/cloud files once: the bytes copied are also the bytes hashed.
@@ -146,12 +146,12 @@ actor LibraryStore {
         let id = hasher.finalize().map { String(format: "%02x", $0) }.joined()
         if let existing = values.first(where: { $0.id == id }) { return existing }
         let dir = folder(id)
-        guard !FileManager.default.fileExists(atPath: dir.path) else { throw ReaderError.message("书库中有未完成的同名记录，请检查书库文件夹后重试") }
+        guard !FileManager.default.fileExists(atPath: dir.path) else { throw ReaderError.message(L("书库中有未完成的同名记录，请检查书库文件夹后重试", "An incomplete item with the same identity exists. Check the library folder and retry.")) }
         var pdf: PDFDocument?
         let paragraphs: [ReadingParagraph]
         if ext == "pdf" {
-            guard let document = PDFDocument(url: copy), document.pageCount > 0 else { throw ReaderError.message("无法打开这份 PDF。") }
-            guard !document.isLocked else { throw ReaderError.message("这份 PDF 有密码保护，请先解锁。") }
+            guard let document = PDFDocument(url: copy), document.pageCount > 0 else { throw ReaderError.message(L("无法打开这份 PDF。", "Could not open this PDF.")) }
+            guard !document.isLocked else { throw ReaderError.message(L("这份 PDF 有密码保护，请先解锁。", "This PDF is password-protected. Unlock it first.")) }
             pdf = document
             paragraphs = []
         } else { paragraphs = try DocumentLoader.load(copy) }
@@ -202,7 +202,7 @@ actor LibraryStore {
         catch {
             if hadCategory {
                 do { try writeOrganization(previousOrganization) }
-                catch { throw ReaderError.message("文档未移除，但分类恢复失败，请检查书库文件夹权限：\(error.localizedDescription)") }
+                catch { throw ReaderError.message(L("文档未移除，但分类恢复失败，请检查书库文件夹权限：\(error.localizedDescription)", "The document was not removed, but category restoration failed. Check library folder permissions: \(error.localizedDescription)")) }
             }
             throw error
         }

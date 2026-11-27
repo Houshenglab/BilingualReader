@@ -34,9 +34,9 @@ struct ResearchAnchor: Codable, Hashable {
         ((rangeLocation == nil && rangeLength == nil) || (rangeLocation ?? -1) >= 0 && (rangeLength ?? 0) > 0)
     }
     var locationLabel: String {
-        if let page = pdfRegions.first?.page { return "第 \(page) 页" }
-        if let paragraphID { return "第 \(paragraphID + 1) 段" }
-        return "原文摘录"
+        if let page = pdfRegions.first?.page { return L("第 \(page) 页", "Page \(page)") }
+        if let paragraphID { return L("第 \(paragraphID + 1) 段", "Paragraph \(paragraphID + 1)") }
+        return L("原文摘录", "Source excerpt")
     }
     func resolvedRange(in text: String) -> NSRange? {
         let source = text as NSString
@@ -58,7 +58,7 @@ enum ResearchColor: String, Codable, CaseIterable, Identifiable {
     case yellow, green, blue, pink
     var id: String { rawValue }
     var label: String {
-        switch self { case .yellow: return "黄色"; case .green: return "绿色"; case .blue: return "蓝色"; case .pink: return "粉色" }
+        switch self { case .yellow: return L("黄色", "Yellow"); case .green: return L("绿色", "Green"); case .blue: return L("蓝色", "Blue"); case .pink: return L("粉色", "Pink") }
     }
     var nsColor: NSColor {
         switch self {
@@ -118,17 +118,17 @@ struct ResearchNote: Codable, Identifiable, Equatable {
                 notes = decoded
             }
             editable = true
-        } catch { self.error = "笔记记录无法读取，原文件已保留：\(error.localizedDescription)" }
+        } catch { self.error = L("笔记记录无法读取，原文件已保留：\(error.localizedDescription)", "Could not read notes; original file retained: \(error.localizedDescription)") }
     }
     private func save(_ value: [ResearchNote]) -> Bool {
         guard editable, let bookID = activeBookID else {
-            if error == nil { error = "请先打开文献，或重新加载笔记。" }; return false
+            if error == nil { error = L("请先打开文献，或重新加载笔记。", "Open a document or reload its notes first.") }; return false
         }
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             try JSONEncoder().encode(value).write(to: root.appendingPathComponent(storageFileName(for: bookID)), options: .atomic)
             notes = value; error = nil; return true
-        } catch { self.error = "保存笔记失败：\(error.localizedDescription)"; return false }
+        } catch { self.error = L("保存笔记失败：\(error.localizedDescription)", "Could not save notes: \(error.localizedDescription)"); return false }
     }
     @discardableResult func highlight(_ color: ResearchColor) -> Bool {
         guard let selection, selection.valid else { return false }
@@ -161,23 +161,23 @@ struct ResearchNote: Codable, Identifiable, Equatable {
     }
     func beginEditing(_ note: ResearchNote) {
         if editingNoteID == note.id { commentRequest = UUID(); return }
-        guard draft.isEmpty else { error = "请先保存或取消正在编辑的笔记。"; commentRequest = UUID(); return }
+        guard draft.isEmpty else { error = L("请先保存或取消正在编辑的笔记。", "Save or cancel the note you are editing first."); commentRequest = UUID(); return }
         selection = note.anchor; editingNoteID = note.id; draftAnchor = note.anchor; standaloneDraft = note.anchor == nil
         draft = note.text; commentRequest = UUID()
     }
     func requestComment() {
         if draft.isEmpty && editingNoteID == nil { draftAnchor = selection; standaloneDraft = false }
-        else if draftAnchor != selection { error = "请先保存或取消正在编辑的笔记。" }
+        else if draftAnchor != selection { error = L("请先保存或取消正在编辑的笔记。", "Save or cancel the note you are editing first.") }
         commentRequest = UUID()
     }
     func cancelEditing() { editingNoteID = nil; draft = ""; draftAnchor = nil; standaloneDraft = false }
 
     func markdown() -> String {
-        var output = "# 文献笔记\n\n"
+        var output = L("# 文献笔记\n\n", "# Research notes\n\n")
         for note in notes.reversed() {
-            output += "## \(note.anchor?.locationLabel ?? "独立笔记") · \(note.createdAt.formatted(date: .abbreviated, time: .shortened))\n\n"
+            output += "## \(note.anchor?.locationLabel ?? L("独立笔记", "Standalone note")) · \(note.createdAt.formatted(date: .abbreviated, time: .shortened))\n\n"
             if let quote = note.anchor?.quote { output += quote.components(separatedBy: .newlines).map { "> " + $0 }.joined(separator: "\n") + "\n\n" }
-            if let color = note.color { output += "高亮：\(color.label)\n\n" }
+            if let color = note.color { output += L("高亮：\(color.label)\n\n", "Highlight: \(color.label)\n\n") }
             if !note.text.isEmpty { output += note.text + "\n\n" }
         }
         return output

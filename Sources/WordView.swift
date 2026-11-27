@@ -41,8 +41,8 @@ struct WordView: NSViewRepresentable {
                 do {
                     let base64 = try await Task.detached { try Data(contentsOf: self.url).base64EncodedString() }.value
                     guard !cancelled && model.documentURL == url && model.documentID == documentID else { return }
-                    webView.callAsyncJavaScript("return await renderWord(bytes);", arguments: ["bytes": base64], in: nil, in: .page) { result in
-                        if case .failure(let error) = result, !self.cancelled { self.model.alert = "Word 排版加载失败：\(error.localizedDescription)" }
+                    webView.callAsyncJavaScript("setReaderLanguage(language); return await renderWord(bytes);", arguments: ["bytes": base64, "language": ReaderLanguage.htmlLanguage], in: nil, in: .page) { result in
+                        if case .failure(let error) = result, !self.cancelled { self.model.alert = L("Word 排版加载失败：\(error.localizedDescription)", "Unable to open Word layout: \(error.localizedDescription)") }
                     }
                 } catch { if !cancelled { model.alert = error.localizedDescription } }
             }
@@ -53,7 +53,7 @@ struct WordView: NSViewRepresentable {
             if kind == "ready", let texts = payload["paragraphs"] as? [String] {
                 model.acceptWordParagraphs(texts, url: url)
                 ready = true
-                model.status = "Word 原文排版 · \(payload["tables"] ?? 0) 个表格 · 点击英文段落展开中文"
+                model.status = L("Word 原文排版 · \(payload["tables"] ?? 0) 个表格 · 点击英文段落展开中文", "Word original layout · Tables: \(payload["tables"] ?? 0) · Click a paragraph to translate")
                 synchronize()
                 view?.callAsyncJavaScript("restoreReadingPosition(id);", arguments: ["id": model.readingParagraphID ?? 0], in: nil, in: .page, completionHandler: nil)
             } else if ready, kind == "selection",
@@ -64,7 +64,7 @@ struct WordView: NSViewRepresentable {
                 model.notebook.selection = ResearchAnchor(paragraphID: id, quote: quote, rangeLocation: location, rangeLength: length)
             } else if ready, kind == "selectionUnsupported" {
                 model.notebook.selection = nil
-                model.status = "请选择同一段落内的文字，便于准确保存高亮与批注"
+                model.status = L("请选择同一段落内的文字，便于准确保存高亮与批注", "Select text within one paragraph to save highlights and comments accurately")
             } else if ready, kind == "selectionCleared" {
                 model.notebook.selection = nil
             } else if ready, kind == "annotationClicked",
@@ -86,7 +86,7 @@ struct WordView: NSViewRepresentable {
                 let signature = "\(p.expanded)|\(p.loading)|\(p.translation ?? "")|\(p.error ?? "")|\(p.activity ?? "")|\(model.isPaused)"
                 if previous[p.id] != signature {
                     previous[p.id] = signature
-                    changed.append(["id": p.id, "expanded": p.expanded, "loading": p.loading, "translation": p.translation ?? "", "error": p.error ?? "", "activity": p.activity ?? "", "paused": model.isPaused])
+                    changed.append(["id": p.id, "expanded": p.expanded, "loading": p.loading, "translation": p.translation ?? "", "error": p.error ?? "", "activity": p.activity ?? "", "activityText": LStatus(p.activity ?? ""), "paused": model.isPaused])
                 }
             }
             if !changed.isEmpty || lastAutomatic != model.autoTranslate {
@@ -116,7 +116,7 @@ struct WordView: NSViewRepresentable {
                               self.model.notebook.requestedJump?.id == note.id else { return }
                         self.lastJump = nil
                         self.model.notebook.requestedJump = nil
-                        if case .failure(let error) = result { self.model.alert = "无法定位批注：\(error.localizedDescription)" }
+                        if case .failure(let error) = result { self.model.alert = L("无法定位批注：\(error.localizedDescription)", "Unable to locate comment: \(error.localizedDescription)") }
                     }
                 }
             } else { lastJump = nil }

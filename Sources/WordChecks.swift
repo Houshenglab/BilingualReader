@@ -23,7 +23,7 @@ import WebKit
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         do {
             let base64 = try Data(contentsOf: fixture).base64EncodedString()
-            view.callAsyncJavaScript("return await renderWord(bytes);", arguments: ["bytes": base64], in: nil, in: .page) { result in
+            view.callAsyncJavaScript("setReaderLanguage(language); return await renderWord(bytes);", arguments: ["bytes": base64, "language": ReaderLanguage.htmlLanguage], in: nil, in: .page) { result in
                 switch result {
                 case .failure(let error): self.fail(error.localizedDescription)
                 case .success(let value):
@@ -35,6 +35,7 @@ import WebKit
     }
     func validate() {
         let js = """
+        if(document.documentElement.lang!==readerLanguage)throw new Error('Reader localization mismatch');
         const tableCount=document.querySelectorAll('table').length;
         const imageCount=document.querySelectorAll('img').length;
         const mathCount=document.querySelectorAll('math').length;
@@ -47,10 +48,10 @@ import WebKit
         if(nodes[id].innerHTML!==original)throw new Error('Original paragraph altered');
         if(nodes[id].nextElementSibling!==translation)throw new Error('Translation must follow original paragraph');
         if(tableParagraph>=0&&translation.closest('td')!==nodes[id].closest('td'))throw new Error('Translation left its table cell');
-        updateReader([{id,expanded:true,loading:true,translation:'',error:'',activity:'等待 2 秒后重试 · 1/2'}],false);
-        if(!translation.textContent.includes('等待 2 秒后重试'))throw new Error('Precise retry state missing');
+        updateReader([{id,expanded:true,loading:true,translation:'',error:'',activity:'等待 2 秒后重试 · 1/2',activityText:L('等待 2 秒后重试 · 1/2','Retrying in 2 seconds · 1/2')}],false);
+        if(!translation.textContent.includes(L('等待 2 秒后重试','Retrying in 2 seconds')))throw new Error('Precise retry state missing');
         updateReader([{id,expanded:true,loading:false,translation:'',error:'',activity:'已暂停',paused:true}],false);
-        if(!translation.querySelector('button')||!translation.textContent.includes('继续翻译'))throw new Error('Resume control missing');
+        if(!translation.querySelector('button')||!translation.textContent.includes(L('继续翻译','Resume')))throw new Error('Resume control missing');
         updateReader([{id,expanded:true,loading:false,translation:'已完成',error:''}],false);
         if(translation.onclick!==null)throw new Error('Completed translation retains retry action');
         updateReader([{id,expanded:false,loading:false,translation:'',error:''}],false);

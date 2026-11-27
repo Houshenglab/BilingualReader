@@ -16,7 +16,7 @@ final class ReaderModel: ObservableObject {
     @Published var documentURL: URL?
     @Published var documentID = UUID()
     @Published var engine: TranslationEngine = .google
-    @Published var status = "打开 PDF 或 Word，点击段落即可展开中文"
+    @Published var status = L("打开 PDF 或 Word，点击段落即可展开中文", "Open a PDF or Word file and click a paragraph to show its Chinese translation.")
     @Published var importing = false
     @Published var documentReady = true
     @Published var isPaused = false
@@ -115,7 +115,7 @@ final class ReaderModel: ObservableObject {
         let version = importGeneration
         importing = true
         documentReady = false
-        status = "正在读取 \(url.lastPathComponent)…"
+        status = L("正在读取 \(url.lastPathComponent)…", "Reading \(url.lastPathComponent)…")
         Task {
             do {
                 let values = try await Task.detached(priority: .userInitiated) { try DocumentLoader.load(url) }.value
@@ -126,19 +126,19 @@ final class ReaderModel: ObservableObject {
                 openResearch(bookID: "file:" + url.standardizedFileURL.path)
                 documentURL = url
                 importing = false
-                status = "\(values.count) 段 · 点击英文下方的「展开中文」"
+                status = L("\(values.count) 段 · 点击英文下方的「展开中文」", "\(values.count) paragraphs · click Show Chinese below the original")
                 autoTranslate = false
                 selectedPDFParagraph = nil
                 pdfMergeBackup = nil
                 pdfVisiblePage = 1
                 showPDFDetails = false
                 pdfMode = .original
-                if url.pathExtension.lowercased() == "pdf" { status = "点击原页中的段落，中文显示在右侧 · 可切换段落对照" }
+                if url.pathExtension.lowercased() == "pdf" { status = L("点击原页中的段落，中文显示在右侧 · 可切换段落对照", "Click a paragraph on the original page to see Chinese on the right · switch to paragraph view anytime") }
             } catch {
                 guard importGeneration == version else { return }
                 importing = false
                 documentReady = documentURL != nil
-                status = documentURL == nil ? "请选择可读取的 PDF 或 Word" : "已保留之前打开的文档"
+                status = documentURL == nil ? L("请选择可读取的 PDF 或 Word", "Select a readable PDF or Word document.") : L("已保留之前打开的文档", "The previously opened document has been retained.")
                 alert = error.localizedDescription
             }
         }
@@ -150,7 +150,7 @@ final class ReaderModel: ObservableObject {
         enqueue(id)
     }
     func mergePDFParagraph(_ direction: Int) {
-        guard !notebook.notes.contains(where: { $0.anchor?.paragraphID != nil }) else { alert = "为保持已有高亮和批注的准确位置，请勿在已有段落批注后重新合并段落。"; return }
+        guard !notebook.notes.contains(where: { $0.anchor?.paragraphID != nil }) else { alert = L("为保持已有高亮和批注的准确位置，请勿在已有段落批注后重新合并段落。", "To preserve highlight and annotation positions, paragraphs cannot be merged after annotation."); return }
         guard let id = selectedPDFParagraph else { return }
         let ids = readingParagraphs.map(\.id)
         guard let index = ids.firstIndex(of: id), ids.indices.contains(index + direction) else { return }
@@ -162,13 +162,13 @@ final class ReaderModel: ObservableObject {
         if let selectedPDFParagraph { enqueue(selectedPDFParagraph) }
     }
     func undoPDFMerge() {
-        guard !notebook.notes.contains(where: { $0.anchor?.paragraphID != nil }) else { alert = "为保持已有高亮和批注的准确位置，暂不能撤销段落合并。"; return }
+        guard !notebook.notes.contains(where: { $0.anchor?.paragraphID != nil }) else { alert = L("为保持已有高亮和批注的准确位置，暂不能撤销段落合并。", "To preserve highlight and annotation positions, the paragraph merge cannot be undone now."); return }
         guard let backup = pdfMergeBackup else { return }
         stop()
         paragraphs = backup.paragraphs
         selectedPDFParagraph = backup.selected
         pdfMergeBackup = nil
-        status = "已撤销上次段落合并"
+        status = L("已撤销上次段落合并", "Undid the last paragraph merge.")
     }
     func movePDFParagraph(_ offset: Int) {
         guard let id = selectedPDFParagraph else { return }
@@ -228,7 +228,7 @@ final class ReaderModel: ObservableObject {
                 activeID = id
                 updatePendingCount()
                 let text = paragraphs[id].text
-                status = "正在翻译第 \(id + 1) 段 · \(selectedEngine.rawValue)"
+                status = L("正在翻译第 \(id + 1) 段 · \(selectedEngine.rawValue)", "Translating paragraph \(id + 1) · \(LStatus(selectedEngine.rawValue))")
                 do {
                     let result = try await translator.translate(text, engine: selectedEngine) { [weak self] message in
                         await self?.reportProgress(message, id: id, generation: version)
@@ -263,14 +263,14 @@ final class ReaderModel: ObservableObject {
             guard generation == version else { return }
             worker = nil
             updatePendingCount()
-            status = failedCount > 0 ? "已完成 \(translatedCount) 段 · \(failedCount) 段失败，可点击重试" : "已完成 \(translatedCount) 段 · 译文已缓存在本机"
+            status = failedCount > 0 ? L("已完成 \(translatedCount) 段 · \(failedCount) 段失败，可点击重试", "\(translatedCount) translated · \(failedCount) failed. Click to retry.") : L("已完成 \(translatedCount) 段 · 译文已缓存在本机", "\(translatedCount) translated · saved locally")
         }
     }
     private func reportProgress(_ message: String, id: Int, generation version: UUID) {
         guard generation == version, activeID == id, paragraphs.indices.contains(id) else { return }
         paragraphs[id].activity = message
     }
-    func pause(reason: String = "翻译已暂停，待翻译内容已保留") {
+    func pause(reason: String = L("翻译已暂停，待翻译内容已保留", "Translation paused. Remaining paragraphs are preserved.")) {
         if !isPaused { automaticBeforePause = autoTranslate }
         generation = UUID()
         worker?.cancel()
@@ -313,7 +313,7 @@ final class ReaderModel: ObservableObject {
         for index in updated.indices { updated[index].loading = false; updated[index].activity = nil }
         paragraphs = updated
         autoTranslate = false
-        status = "翻译已停止，已完成的译文保留"
+        status = L("翻译已停止，已完成的译文保留", "Translation stopped. Completed translations are preserved.")
     }
     func changeEngine() {
         pendingWordSession = nil
@@ -326,7 +326,7 @@ final class ReaderModel: ObservableObject {
             updated[index].expanded = false
         }
         paragraphs = updated
-        status = "已切换到 \(engine.rawValue)，点击段落重新翻译"
+        status = L("已切换到 \(engine.rawValue)，点击段落重新翻译", "Switched to \(LStatus(engine.rawValue)). Click a paragraph to translate again.")
     }
     func collapseAll() {
         var updated = paragraphs
@@ -356,8 +356,8 @@ final class ReaderModel: ObservableObject {
                 paragraphs = updated
                 saveReadingSession()
                 await refreshLibrary()
-                status = "翻译缓存已清理 · 点击段落可重新翻译"
-            } catch { alert = "清理缓存失败：" + error.localizedDescription }
+                status = L("翻译缓存已清理 · 点击段落可重新翻译", "Translation cache cleared · click a paragraph to translate again")
+            } catch { alert = L("清理缓存失败：", "Could not clear cache: ") + error.localizedDescription }
             await refreshCacheInfo()
             clearingCache = false
         }
@@ -365,17 +365,17 @@ final class ReaderModel: ObservableObject {
     func export() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.html]
-        panel.nameFieldStringValue = (documentURL?.deletingPathExtension().lastPathComponent ?? "文档") + "-中英对照.html"
+        panel.nameFieldStringValue = (documentURL?.deletingPathExtension().lastPathComponent ?? L("文档", "Document")) + L("-中英对照.html", "-bilingual.html")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let body = paragraphs.map {
             "<section><p lang=\"en\">\(Self.escape($0.text))</p>" + ($0.translation.map { "<p lang=\"zh-CN\" class=\"translation\">\(Self.escape($0))</p>" } ?? "") + "</section>"
         }.joined(separator: "\n")
         let html = """
-        <!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>中英对照</title>
+        <!doctype html><html lang="\(ReaderLanguage.htmlLanguage)"><meta charset="utf-8"><title>\(L("中英对照", "Bilingual reading"))</title>
         <style>body{max-width:850px;margin:50px auto;padding:0 24px;font:20px/1.8 Georgia,serif}section{margin-bottom:32px}p{white-space:pre-wrap}.translation{font-family:system-ui;color:#17675d;border-left:3px solid #acd6cb;padding-left:20px}</style>
-        <h1>\(Self.escape(documentURL?.lastPathComponent ?? "中英对照"))</h1>\(body)</html>
+        <h1>\(Self.escape(documentURL?.lastPathComponent ?? L("中英对照", "Bilingual reading")))</h1>\(body)</html>
         """
-        do { try html.write(to: url, atomically: true, encoding: .utf8); status = "已导出 \(translatedCount) 段译文及全文原文" }
+        do { try html.write(to: url, atomically: true, encoding: .utf8); status = L("已导出 \(translatedCount) 段译文及全文原文", "Exported \(translatedCount) translations and the original text.") }
         catch { alert = error.localizedDescription }
     }
     static func escape(_ text: String) -> String {

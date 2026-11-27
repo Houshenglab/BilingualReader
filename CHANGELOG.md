@@ -1,3 +1,9 @@
+# 0.9.0 — Bilingual interface / 中英文界面
+
+- English app branding: BilingualReader.
+- English and Simplified Chinese interface, including bookshelf, reader, Word and research tools; select a language in Settings and relaunch.
+- Preserves existing library, notes, translations and AI settings.
+
 # 更新记录
 
 ## 0.8.3

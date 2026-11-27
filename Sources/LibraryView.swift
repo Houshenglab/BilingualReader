@@ -18,17 +18,17 @@ struct LibraryView: View {
                 Image(systemName: "books.vertical").font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.accentColor)
                     .frame(width: 40, height: 40).background(Color.accentColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("文献书架").font(.system(size: 20, weight: .semibold))
-                    Text("\(model.libraryBooks.count) 份文档 · 阅读、笔记与 AI 助手").font(.caption).foregroundStyle(.secondary)
+                    Text(L("文献书架", "Research library")).font(.system(size: 20, weight: .semibold))
+                    Text(L("\(model.libraryBooks.count) 份文档 · 阅读、笔记与 AI 助手", "Documents: \(model.libraryBooks.count) · Read & annotate")).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                TextField("搜索书名或文档", text: $query).textFieldStyle(.roundedBorder).frame(width: 210)
-                    .accessibilityLabel("搜索书架")
-                Picker("书架显示方式", selection: $display) {
+                TextField(L("搜索书名或文档", "Search documents"), text: $query).textFieldStyle(.roundedBorder).frame(width: 210)
+                    .accessibilityLabel(L("搜索书架", "Search library"))
+                Picker(L("书架显示方式", "Library view"), selection: $display) {
                     Image(systemName: "rectangle.stack").tag("shelf")
                     Image(systemName: "square.grid.2x2").tag("grid")
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 86).help("立体书架 / 封面网格")
-                Button { model.chooseFile() } label: { Label("导入文档", systemImage: "plus") }
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 86).help(L("立体书架 / 封面网格", "3D shelf / Cover grid"))
+                Button { model.chooseFile() } label: { Label(L("导入文档", "Import documents"), systemImage: "plus") }
                     .buttonStyle(.borderedProminent).disabled(model.libraryBusy)
             }.padding(.horizontal, 24).padding(.vertical, 14)
             Divider()
@@ -37,19 +37,19 @@ struct LibraryView: View {
             if model.libraryBooks.isEmpty {
                 VStack(spacing: 20) {
                     Image(systemName: "books.vertical").font(.system(size: 64, weight: .ultraLight)).foregroundStyle(Color.accentColor)
-                    Text("把想读的，放在这里。") .font(.system(size: 29, weight: .medium, design: .serif))
-                    Text("拖入 PDF、Word 或 TXT，下次从上次读到的地方继续。") .foregroundStyle(.secondary)
-                    Button("导入第一份文档") { model.chooseFile() }.buttonStyle(.borderedProminent).controlSize(.large).disabled(model.libraryBusy)
-                    Text("可一次选择多份文件 · 原文件保留不变").font(.caption).foregroundStyle(.secondary)
+                    Text(L("把想读的，放在这里。", "Keep your reading here.")) .font(.system(size: 29, weight: .medium, design: .serif))
+                    Text(L("拖入 PDF、Word 或 TXT，下次从上次读到的地方继续。", "Drop PDF, Word or TXT files and pick up where you left off.")) .foregroundStyle(.secondary)
+                    Button(L("导入第一份文档", "Import your first document")) { model.chooseFile() }.buttonStyle(.borderedProminent).controlSize(.large).disabled(model.libraryBusy)
+                    Text(L("可一次选择多份文件 · 原文件保留不变", "Import multiple files · Originals stay unchanged")).font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if books.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: query.isEmpty ? "folder" : "magnifyingglass").font(.largeTitle)
-                    Text(query.isEmpty ? "“\(model.libraryFilterTitle)”里还没有文档" : "这个分类中没有找到匹配文档")
+                    Text(query.isEmpty ? L("“\(model.libraryFilterTitle)”里还没有文档", "No documents in “\(model.libraryFilterTitle)”") : L("这个分类中没有找到匹配文档", "No matching documents in this category"))
                     if query.isEmpty {
-                        Button("导入文档到这里") { model.chooseFile() }.buttonStyle(.borderedProminent).disabled(model.libraryBusy)
-                        Button("查看全部文档") { model.libraryFilter = .all }
-                    } else { Button("清除搜索") { query = "" } }
+                        Button(L("导入文档到这里", "Import here")) { model.chooseFile() }.buttonStyle(.borderedProminent).disabled(model.libraryBusy)
+                        Button(L("查看全部文档", "View all documents")) { model.libraryFilter = .all }
+                    } else { Button(L("清除搜索", "Clear search")) { query = "" } }
                 }
                     .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if display == "grid" {
@@ -85,7 +85,7 @@ struct LibraryView: View {
             Divider()
             HStack(spacing: 10) {
                 if model.libraryBusy { ProgressView().controlSize(.small) }
-                Text(model.libraryStatus.isEmpty ? "文档与笔记保存在本机 · 阅读位置自动记住" : model.libraryStatus)
+                Text(model.libraryStatus.isEmpty ? L("文档与笔记保存在本机 · 阅读位置自动记住", "Documents and notes stay local · Reading position saved automatically") : model.libraryStatus)
                 Spacer()
                 Text("PDF · WORD · TXT").tracking(1)
             }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 9)
@@ -93,15 +93,15 @@ struct LibraryView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onChange(of: query) { _ in selectedID = nil }
         .onChange(of: model.libraryFilter) { _ in selectedID = nil }
-        .alert("从书架移除？", isPresented: Binding(get: { removal != nil }, set: { if !$0 { removal = nil } }), presenting: removal) { book in
-            Button("取消", role: .cancel) { removal = nil }
-            Button("移除", role: .destructive) { model.removeBook(book); removal = nil }
-        } message: { book in Text("将移除“\(book.title)”的书库副本和阅读记录，你导入时的原文件不会被删除。") }
+        .alert(L("从书架移除？", "Remove from library?"), isPresented: Binding(get: { removal != nil }, set: { if !$0 { removal = nil } }), presenting: removal) { book in
+            Button(L("取消", "Cancel"), role: .cancel) { removal = nil }
+            Button(L("移除", "Remove"), role: .destructive) { model.removeBook(book); removal = nil }
+        } message: { book in Text(L("将移除“\(book.title)”的书库副本和阅读记录，你导入时的原文件不会被删除。", "The library copy of “\(book.title)” and its reading history will be removed. Your original file will not be deleted.")) }
     }
     private var shelfStage: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Label("立体书架", systemImage: "rectangle.stack").font(.subheadline.weight(.semibold))
+                Label(L("立体书架", "3D shelf"), systemImage: "rectangle.stack").font(.subheadline.weight(.semibold))
                 Spacer()
                 Text("\(selectedIndex + 1) / \(books.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }.padding(.horizontal, 18).padding(.top, 16)
@@ -124,7 +124,7 @@ struct LibraryView: View {
                             }.buttonStyle(.plain).disabled(model.libraryBusy)
                                 .offset(x: layout.x(for: index), y: delta == 0 ? -3 : 5)
                                 .zIndex(Double(10 - abs(delta)))
-                                .accessibilityLabel("\(book.title)，\(detail(book))")
+                                .accessibilityLabel(L("\(book.title)，\(detail(book))", "\(book.title), \(detail(book))"))
                                 .contextMenu { bookMenu(book) }
                         }
                     }
@@ -135,7 +135,7 @@ struct LibraryView: View {
                         if abs(value.translation.width) > abs(value.translation.height) { move(value.translation.width < 0 ? 1 : -1) }
                     })
             }.clipped()
-            Label("双指左右滑动，或点击封面切换", systemImage: "hand.draw").font(.caption).foregroundStyle(.secondary)
+            Label(L("双指左右滑动，或点击封面切换", "Swipe with two fingers or click a cover"), systemImage: "hand.draw").font(.caption).foregroundStyle(.secondary)
                 .padding(.bottom, 14)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
@@ -145,7 +145,7 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: compact ? 8 : 18) {
             HStack(spacing: 6) {
                 Image(systemName: "bookmark.fill").foregroundStyle(Color.accentColor)
-                Text(book.page > 1 || book.translatedCount > 0 ? "继续阅读" : "准备阅读").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(book.page > 1 || book.translatedCount > 0 ? L("继续阅读", "Continue reading") : L("准备阅读", "Ready to read")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Text(book.format.uppercased()).font(.caption2.weight(.semibold)).tracking(0.8)
                     .padding(.horizontal, 7).padding(.vertical, 4).background(Color.accentColor.opacity(0.1), in: Capsule()).foregroundStyle(Color.accentColor)
@@ -159,11 +159,11 @@ struct LibraryView: View {
             if !compact { Spacer(minLength: 0) }
             VStack(spacing: 8) {
                 Button { model.openBook(book) } label: {
-                    Label(book.page > 1 || book.translatedCount > 0 ? "继续阅读" : "开始阅读", systemImage: "book").frame(maxWidth: .infinity)
+                    Label(book.page > 1 || book.translatedCount > 0 ? L("继续阅读", "Continue reading") : L("开始阅读", "Start reading"), systemImage: "book").frame(maxWidth: .infinity)
                 }.buttonStyle(.borderedProminent).controlSize(.large).disabled(model.libraryBusy)
                 HStack(spacing: 8) {
-                    Button { move(-1) } label: { Label("上一篇", systemImage: "chevron.left").frame(maxWidth: .infinity) }.disabled(selectedIndex == 0).help("上一篇")
-                    Button { move(1) } label: { HStack(spacing: 4) { Text("下一篇"); Image(systemName: "chevron.right") }.frame(maxWidth: .infinity) }.disabled(selectedIndex == books.count - 1).help("下一篇")
+                    Button { move(-1) } label: { Label(L("上一篇", "Previous"), systemImage: "chevron.left").frame(maxWidth: .infinity) }.disabled(selectedIndex == 0).help(L("上一篇", "Previous"))
+                    Button { move(1) } label: { HStack(spacing: 4) { Text(L("下一篇", "Next")); Image(systemName: "chevron.right") }.frame(maxWidth: .infinity) }.disabled(selectedIndex == books.count - 1).help(L("下一篇", "Next"))
                 }.controlSize(.regular)
             }
         }.padding(compact ? 14 : 22).frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
@@ -171,11 +171,11 @@ struct LibraryView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.07)))
     }
     @ViewBuilder private func bookMenu(_ book: LibraryBook) -> some View {
-        Button("打开阅读") { model.openBook(book) }.disabled(model.libraryBusy)
-        Menu("移动到分类") {
+        Button(L("打开阅读", "Open")) { model.openBook(book) }.disabled(model.libraryBusy)
+        Menu(L("移动到分类", "Move to category")) {
             Button { moveBook(book, to: nil) } label: {
-                if model.libraryOrganization.assignments[book.id] == nil { Label("未分类", systemImage: "checkmark") }
-                else { Text("未分类") }
+                if model.libraryOrganization.assignments[book.id] == nil { Label(L("未分类", "Uncategorized"), systemImage: "checkmark") }
+                else { Text(L("未分类", "Uncategorized")) }
             }
             ForEach(model.libraryOrganization.categories) { category in
                 Button { moveBook(book, to: category.id) } label: {
@@ -185,7 +185,7 @@ struct LibraryView: View {
             }
         }.disabled(model.libraryBusy)
         Divider()
-        Button("从书架移除…", role: .destructive) { removal = book }.disabled(model.libraryBusy)
+        Button(L("从书架移除…", "Remove from library…"), role: .destructive) { removal = book }.disabled(model.libraryBusy)
     }
     private func moveBook(_ book: LibraryBook, to categoryID: String?) {
         Task {
@@ -194,8 +194,8 @@ struct LibraryView: View {
         }
     }
     private func detail(_ book: LibraryBook) -> String {
-        let pages = book.pageCount > 0 ? "第 \(book.page) / \(book.pageCount) 页" : book.format.uppercased()
-        return pages + " · 已译 \(book.translatedCount) 段"
+        let pages = book.pageCount > 0 ? L("第 \(book.page) / \(book.pageCount) 页", "Page \(book.page) / \(book.pageCount)") : book.format.uppercased()
+        return pages + L(" · 已译 \(book.translatedCount) 段", " · Translated: \(book.translatedCount)")
     }
     private func move(_ distance: Int) {
         guard !books.isEmpty else { return }

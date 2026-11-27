@@ -6,7 +6,7 @@ extension ReaderModel {
     }
     var documentTitle: String {
         libraryBooks.first(where: { $0.id == currentBookID })?.title
-            ?? documentURL?.deletingPathExtension().lastPathComponent ?? "双语阅读"
+            ?? documentURL?.deletingPathExtension().lastPathComponent ?? "BilingualReader"
     }
     func refreshLibrary() async {
         guard let library else { return }
@@ -15,7 +15,7 @@ extension ReaderModel {
             libraryOrganization = try await library.organization()
             if case .category(let id) = libraryFilter, !libraryOrganization.categories.contains(where: { $0.id == id }) { libraryFilter = .all }
             for book in libraryBooks { libraryCovers[book.id] = await library.coverURL(book) }
-        } catch { alert = error.localizedDescription; libraryStatus = "书库读取失败，已有文件保留" }
+        } catch { alert = error.localizedDescription; libraryStatus = L("书库读取失败，已有文件保留", "Could not read the library. Existing files have been preserved.") }
     }
     func matchingBooks(query: String, filter: LibraryFilter? = nil) -> [LibraryBook] {
         let chosen = filter ?? libraryFilter
@@ -32,13 +32,13 @@ extension ReaderModel {
     }
     var libraryFilterTitle: String {
         switch libraryFilter {
-        case .all: return "全部"
-        case .uncategorized: return "未分类"
-        case .category(let id): return libraryOrganization.categories.first { $0.id == id }?.name ?? "分类"
+        case .all: return L("全部", "All")
+        case .uncategorized: return L("未分类", "Uncategorized")
+        case .category(let id): return libraryOrganization.categories.first { $0.id == id }?.name ?? L("分类", "Category")
         }
     }
     func createLibraryCategory(_ name: String) async throws -> LibraryCategory {
-        guard let library else { throw ReaderError.message("书库未启用") }
+        guard let library else { throw ReaderError.message(L("书库未启用", "Library is not enabled.")) }
         let category = try await library.createCategory(name)
         await refreshLibrary()
         return category
@@ -58,7 +58,7 @@ extension ReaderModel {
         guard let library else { return }
         try await library.assignCategory(ids, to: categoryID)
         await refreshLibrary()
-        libraryStatus = "已更新 \(ids.count) 份文档的分类"
+        libraryStatus = L("已更新 \(ids.count) 份文档的分类", "Updated categories for \(ids.count) documents.")
     }
     func importDocuments(_ urls: [URL], openFirst: Bool = false) {
         guard let library, !libraryBusy, !urls.isEmpty else { return }
@@ -68,13 +68,13 @@ extension ReaderModel {
         Task {
             var imported: [LibraryBook] = [], errors: [String] = []
             for (index, url) in urls.enumerated() {
-                libraryStatus = "正在导入 \(index + 1)/\(urls.count)：\(url.lastPathComponent)"
+                libraryStatus = L("正在导入 \(index + 1)/\(urls.count)：\(url.lastPathComponent)", "Importing \(index + 1)/\(urls.count): \(url.lastPathComponent)")
                 do {
                     let book = try await library.importDocument(url)
                     imported.append(book)
                     if let targetCategory {
                         do { try await library.assignCategory([book.id], to: targetCategory) }
-                        catch { errors.append("\(url.lastPathComponent) 已导入，但归类失败：\(error.localizedDescription)") }
+                        catch { errors.append(L("\(url.lastPathComponent) 已导入，但归类失败：\(error.localizedDescription)", "Imported \(url.lastPathComponent), but categorization failed: \(error.localizedDescription)")) }
                     }
                     await refreshLibrary()
                 }
@@ -82,7 +82,7 @@ extension ReaderModel {
             }
             await refreshLibrary()
             libraryBusy = false
-            libraryStatus = "已加入 \(imported.count) 份文档"
+            libraryStatus = L("已加入 \(imported.count) 份文档", "Added \(imported.count) documents")
             if !errors.isEmpty { alert = errors.joined(separator: "\n") }
             if openFirst, let first = imported.first { openBook(first) }
         }
@@ -101,7 +101,7 @@ extension ReaderModel {
             do {
                 await saveTask?.value
                 let url = await library.documentURL(book)
-                guard FileManager.default.fileExists(atPath: url.path) else { throw ReaderError.message("这本书的本地副本已丢失，请从书架移除后重新导入。") }
+                guard FileManager.default.fileExists(atPath: url.path) else { throw ReaderError.message(L("这本书的本地副本已丢失，请从书架移除后重新导入。", "The local copy is missing. Remove this item from the library and import it again.")) }
                 let state = try await library.session(book.id)
                 let values: [ReadingParagraph]
                 let pendingPDF = book.format == "pdf" && (state == nil || state?.layoutPending == true)
@@ -133,7 +133,7 @@ extension ReaderModel {
                 } else { pendingWordSession = nil }
                 importing = false; showingLibrary = false
                 restoringSession = false
-                status = "已恢复阅读位置 · \(translatedCount) 段译文"
+                status = L("已恢复阅读位置 · \(translatedCount) 段译文", "Reading position restored · \(translatedCount) translated paragraphs")
                 saveReadingSession()
                 if pendingPDF { preparePDFLayout() }
             } catch {
@@ -147,7 +147,7 @@ extension ReaderModel {
         let version = importGeneration
         preparingPDF = true
         pdfPreparationError = nil
-        status = "原页已打开 · 正在准备段落翻译…"
+        status = L("原页已打开 · 正在准备段落翻译…", "Original pages opened · preparing paragraphs…")
         let cancellation = PDFExtractionCancellation()
         pdfPreparationTask = Task {
             defer { if importGeneration == version { preparingPDF = false } }
@@ -161,12 +161,12 @@ extension ReaderModel {
                 paragraphs = values
                 pdfLayoutPending = false
                 documentReady = true
-                status = "段落已就绪 · 点击原页中的英文查看中文"
+                status = L("段落已就绪 · 点击原页中的英文查看中文", "Paragraphs ready · click original text to see the Chinese translation")
                 saveReadingSession()
             } catch {
                 guard !Task.isCancelled, importGeneration == version else { return }
                 pdfPreparationError = error.localizedDescription
-                status = "原页可继续阅读 · 段落分析未完成"
+                status = L("原页可继续阅读 · 段落分析未完成", "You can read the original pages · paragraph analysis is incomplete")
             }
         }
     }
@@ -198,7 +198,7 @@ extension ReaderModel {
         saveTask = Task { [weak self] in
             await previous?.value
             do { try await library.save(id, session: snapshot) }
-            catch { self?.alert = "阅读记录保存失败：\(error.localizedDescription)" }
+            catch { self?.alert = L("阅读记录保存失败：\(error.localizedDescription)", "Could not save reading session: \(error.localizedDescription)") }
         }
     }
     func flushLibrarySave() async { saveReadingSession(); await saveTask?.value }

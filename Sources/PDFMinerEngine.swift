@@ -42,7 +42,7 @@ enum PDFMinerEngine {
     }
     static func extract(_ url: URL, cancellation: PDFExtractionCancellation? = nil) throws -> [Page] {
         guard let resources = resourceDirectory() else {
-            throw ReaderError.message("应用的 PDF 解析引擎缺失，请打开完整的新版 App。")
+            throw ReaderError.message(L("应用的 PDF 解析引擎缺失，请打开完整的新版 App。", "The PDF parsing engine is missing. Open the complete app package."))
         }
         let process = Process()
         process.executableURL = resources.appendingPathComponent("python/bin/python3")
@@ -62,7 +62,7 @@ enum PDFMinerEngine {
         if cancellation?.isCancelled == true { throw CancellationError() }
         guard process.terminationStatus == 0 else {
             let detail = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            throw ReaderError.message("PDF 版面分析未完成。" + (detail.isEmpty ? "请稍后重试或换一份文件。" : String(detail.prefix(350))))
+            throw ReaderError.message(L("PDF 版面分析未完成。", "PDF layout analysis did not finish. ") + (detail.isEmpty ? L("请稍后重试或换一份文件。", "Please retry later or try another file.") : String(detail.prefix(350))))
         }
         return try JSONDecoder().decode([Page].self, from: data)
     }

@@ -30,10 +30,10 @@ enum DocumentLoader {
         let ext = url.pathExtension.lowercased()
         var blocks: [(String, Int?)] = []
         if ext == "pdf" {
-            guard let pdf = PDFDocument(url: url) else { throw ReaderError.message("无法打开这份 PDF。") }
-            guard !pdf.isLocked else { throw ReaderError.message("这份 PDF 有密码保护，请先解锁。") }
+            guard let pdf = PDFDocument(url: url) else { throw ReaderError.message(L("无法打开这份 PDF。", "Could not open this PDF.")) }
+            guard !pdf.isLocked else { throw ReaderError.message(L("这份 PDF 有密码保护，请先解锁。", "This PDF is password-protected. Unlock it first.")) }
             let paragraphs = try PDFLayout.document(pdf, sourceURL: url, cancellation: cancellation)
-            guard !paragraphs.isEmpty else { throw ReaderError.message("没有找到可读取的文字。扫描版 PDF 暂不支持，请先进行 OCR。") }
+            guard !paragraphs.isEmpty else { throw ReaderError.message(L("没有找到可读取的文字。扫描版 PDF 暂不支持，请先进行 OCR。", "No readable text was found. Scanned PDFs require OCR before importing.")) }
             return paragraphs
         } else if ext == "docx" {
             let task = Process()
@@ -45,20 +45,20 @@ enum DocumentLoader {
             try task.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
-            guard task.terminationStatus == 0 else { throw ReaderError.message("无法读取 Word 文档，请确认它是有效的 .docx 文件。") }
+            guard task.terminationStatus == 0 else { throw ReaderError.message(L("无法读取 Word 文档，请确认它是有效的 .docx 文件。", "Could not read the Word document. Make sure it is a valid .docx file.")) }
             let delegate = WordParagraphParser()
             let parser = XMLParser(data: data)
             parser.delegate = delegate
-            guard parser.parse() else { throw ReaderError.message("Word 文档结构损坏，无法读取。") }
+            guard parser.parse() else { throw ReaderError.message(L("Word 文档结构损坏，无法读取。", "The Word document structure is damaged and cannot be read.")) }
             blocks = delegate.paragraphs.map { ($0, nil) }
         } else if ext == "doc" {
-            throw ReaderError.message("请先在 Word 中将旧版 .doc 另存为 .docx，然后打开。")
+            throw ReaderError.message(L("请先在 Word 中将旧版 .doc 另存为 .docx，然后打开。", "Save the legacy .doc file as .docx in Word before opening it."))
         } else {
             let text = try String(contentsOf: url, encoding: .utf8)
             blocks = text.components(separatedBy: "\n\n").map { ($0, nil) }
         }
         let nonempty = blocks.filter { !$0.0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !nonempty.isEmpty else { throw ReaderError.message("没有找到可读取的文字。扫描版 PDF 暂不支持，请先进行 OCR。") }
+        guard !nonempty.isEmpty else { throw ReaderError.message(L("没有找到可读取的文字。扫描版 PDF 暂不支持，请先进行 OCR。", "No readable text was found. Scanned PDFs require OCR before importing.")) }
         return nonempty.enumerated().map {
             ReadingParagraph(id: $0.offset, text: $0.element.0.trimmingCharacters(in: .whitespacesAndNewlines), page: $0.element.1)
         }
@@ -112,12 +112,12 @@ enum CredentialStore {
         if status == errSecItemNotFound {
             status = SecItemAdd(query.merging(value) { _, new in new } as CFDictionary, nil)
         }
-        guard status == errSecSuccess else { throw ReaderError.message("无法保存到系统钥匙串（\(status)）。") }
+        guard status == errSecSuccess else { throw ReaderError.message(L("无法保存到系统钥匙串（\(status)）。", "Could not save to Keychain (\(status)).")) }
     }
     static func remove() throws {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "azure-f0"]
         let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw ReaderError.message("无法移除钥匙串密钥（\(status)）。") }
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw ReaderError.message(L("无法移除钥匙串密钥（\(status)）。", "Could not remove the Keychain credential (\(status)).")) }
     }
 }
 
@@ -144,11 +144,11 @@ enum TranslationFailure: LocalizedError {
     }
     var errorDescription: String? {
         switch self {
-        case .http(429, _): return "服务暂时限流或额度已用完，任务已保留。请稍后继续或切换服务。"
-        case .http(401, _), .http(403, _): return "服务拒绝了请求，请检查密钥、区域或服务访问情况后继续。"
-        case .http(let status, _): return "翻译服务返回 HTTP \(status)，可稍后重试。"
-        case .network(.timedOut): return "翻译请求超时，已尝试重连。可稍后重试这一段。"
-        case .network: return "无法连接翻译服务，请检查网络后继续。"
+        case .http(429, _): return L("服务暂时限流或额度已用完，任务已保留。请稍后继续或切换服务。", "The service is rate-limited or its quota is exhausted. Remaining tasks are preserved; resume later or switch services.")
+        case .http(401, _), .http(403, _): return L("服务拒绝了请求，请检查密钥、区域或服务访问情况后继续。", "The service rejected the request. Check the key, region, or access before resuming.")
+        case .http(let status, _): return L("翻译服务返回 HTTP \(status)，可稍后重试。", "The translation service returned HTTP \(status). Retry later.")
+        case .network(.timedOut): return L("翻译请求超时，已尝试重连。可稍后重试这一段。", "The translation request timed out after reconnecting. Retry this paragraph later.")
+        case .network: return L("无法连接翻译服务，请检查网络后继续。", "Could not connect to the translation service. Check the network and resume.")
         case .configuration(let message), .response(let message, _): return message
         }
     }
@@ -190,7 +190,7 @@ actor WebTranslator {
             guard version == cacheGeneration else { throw CancellationError() }
             let partKey = cacheKey(part, engine: engine)
             if let value = chunkCache[partKey] { pieces.append(value); continue }
-            await progress(parts.count > 1 ? "正在翻译 · 片段 \(index + 1)/\(parts.count)" : "正在翻译…")
+            await progress(parts.count > 1 ? L("正在翻译 · 片段 \(index + 1)/\(parts.count)", "Translating · part \(index + 1)/\(parts.count)") : L("正在翻译…", "Translating…"))
             let value: String
             switch engine {
             case .google: value = try await google(part, progress: progress)
@@ -198,7 +198,7 @@ actor WebTranslator {
             case .azure: value = try await azure(part, progress: progress)
             }
             guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw TranslationFailure.response("服务返回了空译文，请重试这一段。", false)
+                throw TranslationFailure.response(L("服务返回了空译文，请重试这一段。", "The service returned an empty translation. Retry this paragraph."), false)
             }
             try Task.checkCancellation()
             guard version == cacheGeneration else { throw CancellationError() }
@@ -207,7 +207,7 @@ actor WebTranslator {
             if index < parts.count - 1 { try await Task.sleep(nanoseconds: 250_000_000) }
         }
         let result = pieces.joined(separator: " ")
-        guard !result.isEmpty else { throw TranslationFailure.response("没有可翻译的文字。", false) }
+        guard !result.isEmpty else { throw TranslationFailure.response(L("没有可翻译的文字。", "No text is available to translate."), false) }
         try Task.checkCancellation()
         guard version == cacheGeneration else { throw CancellationError() }
         cache[key] = result
@@ -240,7 +240,7 @@ actor WebTranslator {
             do {
                 let (data, response) = try await session.data(for: request)
                 try Task.checkCancellation()
-                guard let http = response as? HTTPURLResponse else { throw TranslationFailure.response("服务返回了无效响应。", false) }
+                guard let http = response as? HTTPURLResponse else { throw TranslationFailure.response(L("服务返回了无效响应。", "The service returned an invalid response."), false) }
                 guard (200..<300).contains(http.statusCode) else {
                     throw TranslationFailure.http(http.statusCode, Self.retryAfter(http.value(forHTTPHeaderField: "Retry-After")))
                 }
@@ -258,11 +258,11 @@ actor WebTranslator {
                     retry = delay <= 30
                 }
                 guard retry && attempt < 2 else { throw failure }
-                await progress("等待 \(Int(ceil(delay))) 秒后重试 · \(attempt + 1)/2")
+                await progress(L("等待 \(Int(ceil(delay))) 秒后重试 · \(attempt + 1)/2", "Retrying in \(Int(ceil(delay))) seconds · \(attempt + 1)/2"))
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
         }
-        throw TranslationFailure.response("翻译未完成。", false)
+        throw TranslationFailure.response(L("翻译未完成。", "Translation did not finish."), false)
     }
     static func retryAfter(_ value: String?) -> TimeInterval? {
         guard let value else { return nil }
@@ -282,7 +282,7 @@ actor WebTranslator {
         var components = URLComponents(string: "https://translate.googleapis.com/translate_a/single")!
         components.queryItems = [URLQueryItem(name: "client", value: "gtx"), URLQueryItem(name: "sl", value: "auto"), URLQueryItem(name: "tl", value: "zh-CN"), URLQueryItem(name: "dt", value: "t"), URLQueryItem(name: "q", value: text)]
         let data = try await fetch(request(components.url!), progress: progress)
-        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [Any], let segments = json.first as? [[Any]] else { throw TranslationFailure.response("Google 响应格式发生变化，请稍后继续或切换服务。", true) }
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [Any], let segments = json.first as? [[Any]] else { throw TranslationFailure.response(L("Google 响应格式发生变化，请稍后继续或切换服务。", "The Google response format changed. Resume later or switch services."), true) }
         return segments.compactMap { $0.first as? String }.joined()
     }
     static func azureRequest(text: String, key: String, region: String) throws -> URLRequest {
@@ -298,20 +298,20 @@ actor WebTranslator {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
               let translations = json.first?["translations"] as? [[String: Any]],
               let text = translations.first?["text"] as? String, !text.isEmpty else {
-            throw ReaderError.message("微软官方接口未返回有效译文。请检查 F0 资源配置。")
+            throw ReaderError.message(L("微软官方接口未返回有效译文。请检查 F0 资源配置。", "Microsoft Translator returned no valid translation. Check your F0 resource settings."))
         }
         return text
     }
     private func azure(_ text: String, progress: @escaping TranslationProgress) async throws -> String {
         guard UserDefaults.standard.bool(forKey: "azureF0Confirmed"), let key = CredentialStore.read(), !key.isEmpty else {
-            throw TranslationFailure.configuration("请在设置中配置微软 Translator F0 免费档密钥。")
+            throw TranslationFailure.configuration(L("请在设置中配置微软 Translator F0 免费档密钥。", "Configure a Microsoft Translator F0 key in Settings."))
         }
         let req = try Self.azureRequest(text: text, key: key, region: UserDefaults.standard.string(forKey: "azureRegion") ?? "global")
         return try Self.azureResult(await fetch(req, progress: progress))
     }
     private func credentials(progress: @escaping TranslationProgress) async throws -> BingCredentials {
         if let credentials = bingCredentials, credentials.expires > Date() { return credentials }
-        await progress("正在连接必应…")
+        await progress(L("正在连接必应…", "Connecting to Bing…"))
         let data = try await fetch(request(URL(string: "https://www.bing.com/translator")!), progress: progress)
         let html = String(decoding: data, as: UTF8.self)
         let ig = Self.capture(#"IG:"([^"]+)""#, html) ?? Self.capture(#""ig":"([^"]+)""#, html)
@@ -319,7 +319,7 @@ actor WebTranslator {
         let key = Self.capture(#"params_AbusePreventionHelper\s*=\s*\[(\d+),"#, html)
         let token = Self.capture(#"params_AbusePreventionHelper\s*=\s*\[\d+,"([^"]+)""#, html)
         guard let ig, let iid, let key, let token else {
-            throw TranslationFailure.response("必应网页暂时无法使用，请稍后继续或切换服务。", true)
+            throw TranslationFailure.response(L("必应网页暂时无法使用，请稍后继续或切换服务。", "Bing web translation is temporarily unavailable. Resume later or switch services."), true)
         }
         let duration = Self.capture(#"params_AbusePreventionHelper\s*=\s*\[\d+,"[^"]+",\s*(\d+)"#, html).flatMap(Double.init).map { $0 / 1000 } ?? 300
         let value = BingCredentials(ig: ig, iid: iid, key: key, token: token, expires: Date().addingTimeInterval(max(1, min(1800, duration - 30))))
@@ -340,7 +340,7 @@ actor WebTranslator {
                 let json = try? JSONSerialization.jsonObject(with: data)
                 if let error = json as? [String: Any], let code = error["statusCode"] as? Int { throw TranslationFailure.http(code, nil) }
                 guard let response = json as? [[String: Any]], let translations = response.first?["translations"] as? [[String: Any]], let value = translations.first?["text"] as? String else {
-                    throw TranslationFailure.response("必应未返回有效译文，请稍后继续或切换服务。", true)
+                    throw TranslationFailure.response(L("必应未返回有效译文，请稍后继续或切换服务。", "Bing returned no valid translation. Resume later or switch services."), true)
                 }
                 return value
             } catch let failure as TranslationFailure {
@@ -349,12 +349,12 @@ actor WebTranslator {
                     continue
                 }
                 if case .http(let code, _) = failure, [400, 401, 403].contains(code) {
-                    throw TranslationFailure.configuration("必应网页验证未通过，待翻译内容已保留。可在设置中选择 Google，或稍后继续。")
+                    throw TranslationFailure.configuration(L("必应网页验证未通过，待翻译内容已保留。可在设置中选择 Google，或稍后继续。", "Bing web verification failed. Remaining tasks are preserved. Choose Google in Settings or resume later."))
                 }
                 throw failure
             }
         }
-        throw TranslationFailure.configuration("必应凭证刷新失败，请稍后继续。")
+        throw TranslationFailure.configuration(L("必应凭证刷新失败，请稍后继续。", "Bing credential refresh failed. Resume later."))
     }
     private static func encode(_ value: String) -> String { value.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~")))! }
     private static func capture(_ pattern: String, _ text: String) -> String? {

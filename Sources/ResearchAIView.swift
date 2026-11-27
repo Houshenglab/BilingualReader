@@ -37,10 +37,10 @@ struct ResearchAIView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $settings) { ResearchAISettings(ai: ai) }
-        .alert("清除本篇文献的 AI 对话？", isPresented: $confirmClear) {
-            Button("取消", role: .cancel) {}
-            Button("清除", role: .destructive) { ai.clear() }
-        } message: { Text("仅删除本地对话记录，已保存的笔记和原始文献保留。") }
+        .alert(L("清除本篇文献的 AI 对话？", "Clear this document’s AI chat?"), isPresented: $confirmClear) {
+            Button(L("取消", "Cancel"), role: .cancel) {}
+            Button(L("清除", "Clear"), role: .destructive) { ai.clear() }
+        } message: { Text(L("仅删除本地对话记录，已保存的笔记和原始文献保留。", "Only local chat history is deleted. Saved notes and the original document are retained.")) }
     }
     static func clampedComposerHeight(_ height: Double, availableHeight: CGFloat) -> CGFloat {
         // Keep room for a substantial conversation even on the shortest panel.
@@ -60,32 +60,32 @@ struct ResearchAIView: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .disabled(ai.busy)
             } else {
-                Label("AI 助手", systemImage: "sparkles")
+                Label(L("AI 助手", "AI assistant"), systemImage: "sparkles")
                     .font(.callout.weight(.semibold)).foregroundStyle(Color.accentColor)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Button("配置 API") { settings = true }
+                Button(L("配置 API", "Configure API")) { settings = true }
                     .font(.callout.weight(.medium)).buttonStyle(.borderless)
-                    .accessibilityLabel("配置 AI API").disabled(ai.busy)
+                    .accessibilityLabel(L("配置 AI API", "Configure AI API")).disabled(ai.busy)
             }
             if let onDock {
                 Button(action: onDock) { Image(systemName: "rectangle.portrait.and.arrow.right").frame(width: 23, height: 26) }
-                    .buttonStyle(.borderless).help("停靠回阅读侧栏").accessibilityLabel("停靠回阅读侧栏")
+                    .buttonStyle(.borderless).help(L("停靠回阅读侧栏", "Dock to reader")).accessibilityLabel(L("停靠回阅读侧栏", "Dock to reader"))
                     .accessibilityIdentifier("ai-dock-button")
             } else if let onDetach {
                 Button(action: onDetach) { Image(systemName: "arrow.up.right.square").frame(width: 23, height: 26) }
-                    .buttonStyle(.borderless).help("移到独立窗口").accessibilityLabel("移到独立窗口")
+                    .buttonStyle(.borderless).help(L("移到独立窗口", "Open in separate window")).accessibilityLabel(L("移到独立窗口", "Open in separate window"))
                     .accessibilityIdentifier("ai-detach-button")
             }
             Menu {
-                Button { settings = true } label: { Label("配置 API", systemImage: "slider.horizontal.3") }.disabled(ai.busy)
-                Button { contextInformation = true } label: { Label("发送范围与隐私", systemImage: "info.circle") }
+                Button { settings = true } label: { Label(L("配置 API", "Configure API"), systemImage: "slider.horizontal.3") }.disabled(ai.busy)
+                Button { contextInformation = true } label: { Label(L("发送范围与隐私", "Content scope and privacy"), systemImage: "info.circle") }
                 Divider()
-                Button("清除本篇对话记录…", role: .destructive) { confirmClear = true }
+                Button(L("清除本篇对话记录…", "Clear this chat…"), role: .destructive) { confirmClear = true }
                     .disabled(ai.busy || ai.messages.isEmpty || !ai.historyAvailable)
             } label: { Image(systemName: "ellipsis").frame(width: 22, height: 26) }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .accessibilityLabel("对话操作").accessibilityIdentifier("ai-more-actions")
+            .accessibilityLabel(L("对话操作", "Chat actions")).accessibilityIdentifier("ai-more-actions")
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
     }
@@ -103,10 +103,10 @@ struct ResearchAIView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("切换模型")
+        .accessibilityLabel(L("切换模型", "Change model"))
         .accessibilityValue(ai.model)
         .accessibilityIdentifier("ai-model-picker")
-        .help("选择当前 API 帐户可用的模型：\(ai.model)")
+        .help(L("选择当前 API 帐户可用的模型：\(ai.model)", "Choose a model available to your API account: \(ai.model)"))
         .popover(isPresented: $modelPicker, arrowEdge: .bottom) {
             ResearchAIModelChooser(ai: ai, base: ai.baseURL, current: ai.model, onSelect: { id in
                 ai.selectModel(id)
@@ -124,13 +124,13 @@ struct ResearchAIView: View {
                     if ai.messages.isEmpty { introduction }
                     ForEach(ai.messages) { message in messageView(message) }
                     if ai.busy {
-                        HStack(spacing: 8) { ProgressView().controlSize(.small); Text("AI 正在思考…").font(.callout).foregroundStyle(.secondary) }
+                        HStack(spacing: 8) { ProgressView().controlSize(.small); Text(L("AI 正在思考…", "AI is thinking…")).font(.callout).foregroundStyle(.secondary) }
                     }
                     if let error = ai.error {
                         VStack(alignment: .leading, spacing: 8) {
                             Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                             if !ai.busy, let last = ai.messages.last, last.role == .user {
-                                Button("再次编辑提问") { ai.question = last.text; ai.error = nil }.font(.caption).buttonStyle(.link)
+                                Button(L("再次编辑提问", "Edit question again")) { ai.question = last.text; ai.error = nil }.font(.caption).buttonStyle(.link)
                             }
                         }
                     }
@@ -146,19 +146,19 @@ struct ResearchAIView: View {
         HStack(spacing: 8) {
             Image(systemName: "sparkle.magnifyingglass")
                 .font(.system(size: 19, weight: .medium)).foregroundStyle(Color.accentColor)
-            Text("问这篇文献").font(.callout.weight(.semibold)).foregroundStyle(.secondary)
+            Text(L("问这篇文献", "Ask about this paper")).font(.callout.weight(.semibold)).foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }.padding(.vertical, 3)
     }
     private var promptMenu: some View {
         Menu {
-            suggestion("概括文献要点", icon: "list.bullet.rectangle", prompt: "请概括这篇文献的研究背景、目标、核心发现和意义。指出资料范围是否完整。")
-            suggestion("梳理研究方法", icon: "point.3.connected.trianglepath.dotted", prompt: "请按研究问题、数据来源、实验或分析方法、关键假设梳理这篇文献。")
-            suggestion("分析结论与局限", icon: "text.magnifyingglass", prompt: "请解释主要结论、证据、创新点和局限性，区分作者的结论与推断。")
-            suggestion("解释选中文字", icon: "text.cursor", prompt: "请用通俗语言解释选中文字的含义、专业术语及其科研背景。", selection: true)
+            suggestion(L("概括文献要点", "Summarize the paper"), icon: "list.bullet.rectangle", prompt: L("请概括这篇文献的研究背景、目标、核心发现和意义。指出资料范围是否完整。", "Summarize the research background, goals, main findings and significance of this paper. State whether the provided material is complete."))
+            suggestion(L("梳理研究方法", "Review methods"), icon: "point.3.connected.trianglepath.dotted", prompt: L("请按研究问题、数据来源、实验或分析方法、关键假设梳理这篇文献。", "Outline this paper by research question, data sources, experimental or analytical methods, and key assumptions."))
+            suggestion(L("分析结论与局限", "Analyze conclusions"), icon: "text.magnifyingglass", prompt: L("请解释主要结论、证据、创新点和局限性，区分作者的结论与推断。", "Explain the main conclusions, evidence, innovations and limitations, distinguishing the authors’ conclusions from inferences."))
+            suggestion(L("解释选中文字", "Explain selected text"), icon: "text.cursor", prompt: L("请用通俗语言解释选中文字的含义、专业术语及其科研背景。", "Explain the selected text, technical terms and scientific context in plain language."), selection: true)
         } label: { Image(systemName: "sparkles").frame(width: 23, height: 25) }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-        .accessibilityLabel("常用提问").help("常用提问")
+        .accessibilityLabel(L("常用提问", "Suggested questions")).help(L("常用提问", "Suggested questions"))
         .accessibilityIdentifier("ai-prompt-menu")
     }
     private func suggestion(_ title: String, icon: String, prompt: String, selection: Bool = false) -> some View {
@@ -173,10 +173,10 @@ struct ResearchAIView: View {
             HStack(spacing: 6) {
                 Image(systemName: message.role == .assistant ? "sparkles" : "person.crop.circle")
                     .font(.callout).foregroundStyle(message.role == .assistant ? Color.accentColor : Color.secondary)
-                Text(message.role == .assistant ? "AI 助手" : "你").font(.caption.weight(.semibold))
+                Text(message.role == .assistant ? L("AI 助手", "AI assistant") : L("你", "You")).font(.caption.weight(.semibold))
                 Spacer(minLength: 4)
                 if let label = message.contextLabel {
-                    Label(label.contains("摘录") ? "节选" : (label.contains("选中") ? "选区" : (label.contains("全文") ? "全文" : "对话")), systemImage: "doc.text")
+                    Label(contextTag(label), systemImage: "doc.text")
                         .font(.caption2).foregroundStyle(.secondary).lineLimit(1).help(label)
                         .accessibilityLabel(label)
                 }
@@ -188,8 +188,8 @@ struct ResearchAIView: View {
             }
             if message.role == .assistant {
                 HStack(spacing: 12) {
-                    Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(message.text, forType: .string) } label: { Label("复制", systemImage: "doc.on.doc") }
-                    Button { saveNote(message.text) } label: { Label("存为笔记", systemImage: "note.text") }
+                    Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(message.text, forType: .string) } label: { Label(L("复制", "Copy"), systemImage: "doc.on.doc") }
+                    Button { saveNote(message.text) } label: { Label(L("存为笔记", "Save as note"), systemImage: "note.text") }
                 }.font(.caption).buttonStyle(.borderless)
             }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -223,11 +223,11 @@ struct ResearchAIView: View {
                 resizeStart = nil
                 if !resizeHovered { NSCursor.arrow.set() }
             })
-        .help("上下拖动调整输入框高度")
+        .help(L("上下拖动调整输入框高度", "Drag up or down to resize the input"))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("输入框高度")
+        .accessibilityLabel(L("输入框高度", "Input height"))
         .accessibilityIdentifier("ai-composer-resize")
-        .accessibilityValue("\(Int(height)) 点")
+        .accessibilityValue(L("\(Int(height)) 点", "\(Int(height)) pt"))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: composerHeight = Double(Self.clampedComposerHeight(Double(height + 16), availableHeight: availableHeight))
@@ -238,21 +238,21 @@ struct ResearchAIView: View {
     }
     private var scopeMenu: some View {
         Menu {
-            Picker("资料范围", selection: $ai.scope) {
-                ForEach(ResearchAIScope.allCases) { scope in Text(scope.rawValue).tag(scope) }
+            Picker(L("资料范围", "Content scope"), selection: $ai.scope) {
+                ForEach(ResearchAIScope.allCases) { scope in Text(scope.label).tag(scope) }
             }
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: ai.scope == .none ? "bubble.left" : (ai.scope == .selection ? "text.cursor" : "doc.text"))
-                Text(ai.scope == .none ? "对话" : (ai.scope == .selection ? "选区" : "文献"))
+                Text(ai.scope == .none ? L("对话", "Chat") : (ai.scope == .selection ? L("选区", "Selection") : L("文献", "Document")))
                     .font(.caption.weight(.medium)).lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
             }.padding(.horizontal, 5).frame(height: 25)
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-        .help("本轮资料范围：\(context.label)")
-        .accessibilityLabel("资料范围")
-        .accessibilityValue(ai.scope.rawValue)
+        .help(L("本轮资料范围：\(context.label)", "Content scope: \(context.label)"))
+        .accessibilityLabel(L("资料范围", "Content scope"))
+        .accessibilityValue(ai.scope.label)
         .accessibilityIdentifier("ai-context-scope")
     }
     private var contextBadge: some View {
@@ -260,10 +260,10 @@ struct ResearchAIView: View {
             HStack(spacing: 4) {
                 if !context.isComplete {
                     Image(systemName: "doc.text.magnifyingglass")
-                    Text(ai.scope == .document ? "节选·非全文" : "选区节选").lineLimit(1)
+                    Text(ai.scope == .document ? L("节选·非全文", "Partial text") : L("选区节选", "Selection excerpt")).lineLimit(1)
                 } else if ai.scope != .none && context.text.isEmpty {
                     Image(systemName: "exclamationmark.circle")
-                    Text(ai.scope == .selection ? "未选中" : "无正文").lineLimit(1)
+                    Text(ai.scope == .selection ? L("未选中", "No selection") : L("无正文", "No text")).lineLimit(1)
                 } else {
                     Image(systemName: "info.circle")
                 }
@@ -272,15 +272,15 @@ struct ResearchAIView: View {
             .foregroundStyle(!context.isComplete || (ai.scope != .none && context.text.isEmpty) ? Color.orange : Color.secondary)
         }
         .buttonStyle(.plain)
-        .help(context.label + " · 点击查看发送范围与隐私")
-        .accessibilityLabel("发送范围与隐私")
+        .help(context.label + L(" · 点击查看发送范围与隐私", " · View content scope and privacy"))
+        .accessibilityLabel(L("发送范围与隐私", "Content scope and privacy"))
         .accessibilityValue(context.label)
         .accessibilityIdentifier("ai-context-information")
         .popover(isPresented: $contextInformation, arrowEdge: .top) { contextDetails }
     }
     private var contextDetails: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text("本轮发送范围").font(.headline)
+            Text(L("本轮发送范围", "Content to send")).font(.headline)
             Label(context.label, systemImage: "doc.text").font(.callout)
                 .foregroundStyle(context.isComplete ? Color.secondary : Color.orange)
                 .fixedSize(horizontal: false, vertical: true)
@@ -288,24 +288,24 @@ struct ResearchAIView: View {
                 Text(text).font(.caption).lineLimit(4).textSelection(.enabled)
             }
             if ai.configured, let host = (try? ResearchAIConfiguration.endpoint(ai.baseURL))?.host {
-                Label("发送至 \(host)", systemImage: "network").font(.callout)
+                Label(L("发送至 \(host)", "Send to \(host)"), systemImage: "network").font(.callout)
             }
             Divider()
-            Text("提问会附带近期对话和此前选区摘录，可能产生 API 费用。仅发送提问时才提交文献内容；模型列表查询不包含文献。")
+            Text(L("提问会附带近期对话和此前选区摘录，可能产生 API 费用。仅发送提问时才提交文献内容；模型列表查询不包含文献。", "Questions include recent chat and prior selected excerpts and may incur API charges. Document content is sent only when submitting a question; model listing does not send documents."))
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("AI 回答请结合原文核对。").font(.caption).foregroundStyle(.secondary)
+            Text(L("AI 回答请结合原文核对。", "Check AI responses against the source.")).font(.caption).foregroundStyle(.secondary)
         }.padding(14).frame(width: 270, alignment: .leading)
     }
     private func composer(height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topLeading) {
                 if ai.question.isEmpty {
-                    Text("问这篇文献…").font(.callout).foregroundStyle(.secondary)
+                    Text(L("问这篇文献…", "Ask about this paper…")).font(.callout).foregroundStyle(.secondary)
                         .padding(.top, 8).padding(.leading, 9).allowsHitTesting(false)
                 }
                 TextEditor(text: $ai.question).font(.system(size: 14)).scrollContentBackground(.hidden)
                     .padding(4).frame(height: height)
-                    .accessibilityLabel("输入问题").accessibilityIdentifier("ai-question-input")
+                    .accessibilityLabel(L("输入问题", "Enter a question")).accessibilityIdentifier("ai-question-input")
             }
             .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.12)))
@@ -315,12 +315,12 @@ struct ResearchAIView: View {
                 Spacer(minLength: 0)
                 promptMenu
                 if ai.busy {
-                    Button { ai.cancel() } label: { Label("停止", systemImage: "stop.fill") }
+                    Button { ai.cancel() } label: { Label(L("停止", "Stop"), systemImage: "stop.fill") }
                         .buttonStyle(.bordered).controlSize(.small)
                 } else {
-                    Button { ai.send(title: title, context: context) } label: { Label("发送", systemImage: "arrow.up") }
+                    Button { ai.send(title: title, context: context) } label: { Label(L("发送", "Send"), systemImage: "arrow.up") }
                         .buttonStyle(.borderedProminent).controlSize(.small).disabled(!canSend)
-                        .help("发送提问").accessibilityIdentifier("ai-send-question")
+                        .help(L("发送提问", "Send question")).accessibilityIdentifier("ai-send-question")
                 }
             }
             .font(.caption)
@@ -360,25 +360,25 @@ struct ResearchAIModelChooser: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("选择模型").font(.headline)
-                    Text(models.isEmpty ? "API 帐户模型目录" : "API 帐户模型目录 · \(models.count) 个模型")
+                    Text(L("选择模型", "Select model")).font(.headline)
+                    Text(models.isEmpty ? L("API 帐户模型目录", "API model catalog") : L("API 帐户模型目录 · \(models.count) 个模型", "API model catalog · \(models.count) models"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button { refresh() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 13, weight: .medium)) }
-                    .buttonStyle(.borderless).help("刷新模型目录").accessibilityLabel("刷新模型目录")
+                    .buttonStyle(.borderless).help(L("刷新模型目录", "Refresh model catalog")).accessibilityLabel(L("刷新模型目录", "Refresh model catalog"))
                     .accessibilityIdentifier("ai-model-refresh")
                     .disabled(ai.loadingModels)
             }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("搜索模型名称或 ID", text: $query).textFieldStyle(.plain)
-                    .accessibilityLabel("搜索模型")
+                TextField(L("搜索模型名称或 ID", "Search model names or IDs"), text: $query).textFieldStyle(.plain)
+                    .accessibilityLabel(L("搜索模型", "Search models"))
                     .accessibilityIdentifier("ai-model-search")
                     .onSubmit { if filtered.count == 1 && !ai.loadingModels { onSelect(filtered[0].id) } }
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                        .buttonStyle(.borderless).accessibilityLabel("清除搜索")
+                        .buttonStyle(.borderless).accessibilityLabel(L("清除搜索", "Clear search"))
                 }
             }
             .padding(9)
@@ -387,15 +387,15 @@ struct ResearchAIModelChooser: View {
             if ai.loadingModels {
                 HStack(spacing: 9) {
                     ProgressView().controlSize(.small)
-                    Text("正在获取模型目录…").font(.callout).foregroundStyle(.secondary)
+                    Text(L("正在获取模型目录…", "Loading model catalog…")).font(.callout).foregroundStyle(.secondary)
                     Spacer()
-                    Button("停止") { refreshTask?.cancel(); ai.cancelModelLoading() }.buttonStyle(.borderless)
+                    Button(L("停止", "Stop")) { refreshTask?.cancel(); ai.cancelModelLoading() }.buttonStyle(.borderless)
                 }.padding(.vertical, 8)
             } else if let error = ai.modelsError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                 if !models.isEmpty {
-                    Text("下方为此前查询的模型目录。").font(.caption2).foregroundStyle(.secondary)
+                    Text(L("下方为此前查询的模型目录。", "Showing the previously loaded model catalog.")).font(.caption2).foregroundStyle(.secondary)
                 }
             }
             if !filtered.isEmpty {
@@ -428,19 +428,19 @@ struct ResearchAIModelChooser: View {
                 VStack(spacing: 7) {
                     Image(systemName: models.isEmpty ? "square.stack" : "magnifyingglass")
                         .font(.system(size: 19)).foregroundStyle(.secondary)
-                    Text(!query.isEmpty && !models.isEmpty ? "没有匹配的模型" : (requested && ai.modelsError == nil ? "服务未返回模型" : "尚无模型目录"))
+                    Text(!query.isEmpty && !models.isEmpty ? L("没有匹配的模型", "No matching models") : (requested && ai.modelsError == nil ? L("服务未返回模型", "No models returned") : L("尚无模型目录", "No model catalog yet")))
                         .font(.callout.weight(.medium))
-                    Text(models.isEmpty ? "可刷新目录，也可直接输入已知模型 ID。" : "试试其他模型名称。")
+                    Text(models.isEmpty ? L("可刷新目录，也可直接输入已知模型 ID。", "Refresh the catalog or enter a known model ID.") : L("试试其他模型名称。", "Try another model name."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 14)
             }
             Divider()
             if let onManual {
-                Button(action: onManual) { Label("手动输入模型 ID…", systemImage: "pencil") }
+                Button(action: onManual) { Label(L("手动输入模型 ID…", "Enter model ID manually…"), systemImage: "pencil") }
                     .buttonStyle(.borderless).font(.callout)
             }
-            Text("目录可能包含不支持对话的模型，请选择兼容 Chat Completions 的模型。查询目录不发送文献内容。")
+            Text(L("目录可能包含不支持对话的模型，请选择兼容 Chat Completions 的模型。查询目录不发送文献内容。", "The catalog may include non-chat models. Choose a Chat Completions-compatible model. Listing models does not send documents."))
                 .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(15).frame(width: 322)
@@ -486,7 +486,7 @@ struct ResearchEffortPicker: View {
         Button { showOptions = true } label: {
             HStack(spacing: 6) {
                 ResearchEffortMeter(effort: value)
-                Text(efforts.count <= 1 ? "服务默认" : value.label).font(.caption.weight(.medium)).lineLimit(1)
+                Text(efforts.count <= 1 ? L("服务默认", "Default") : value.label).font(.caption.weight(.medium)).lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 9).padding(.vertical, 7)
@@ -495,10 +495,10 @@ struct ResearchEffortPicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("推理强度")
-        .accessibilityValue(efforts.count <= 1 ? "服务默认" : value.label)
+        .accessibilityLabel(L("推理强度", "Reasoning"))
+        .accessibilityValue(efforts.count <= 1 ? L("服务默认", "Default") : value.label)
         .accessibilityIdentifier("ai-effort-picker")
-        .help("选择推理强度：\(value.label)")
+        .help(L("选择推理强度：\(value.label)", "Choose reasoning effort: \(value.label)"))
         .popover(isPresented: $showOptions, arrowEdge: .bottom) {
             ResearchEffortOptions(efforts: efforts, selected: value, onSelect: { item in
                 withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.80)) { onSelect(item) }
@@ -518,16 +518,16 @@ struct ResearchEffortOptions: View {
                 ResearchEffortMeter(effort: selected)
                     .padding(9).background(Color.accentColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("推理强度").font(.headline)
-                    Text("当前 · \(efforts.count <= 1 ? "服务默认" : selected.label)").font(.caption).foregroundStyle(.secondary)
+                    Text(L("推理强度", "Reasoning")).font(.headline)
+                    Text(L("当前 · ", "Current · ") + (efforts.count <= 1 ? L("服务默认", "Default") : selected.label)).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
             if efforts.count <= 1 {
-                Text("此服务或模型没有已确认的可调推理档位，将使用服务默认设置。")
+                Text(L("此服务或模型没有已确认的可调推理档位，将使用服务默认设置。", "This service or model has no confirmed reasoning options. Default settings will apply."))
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("较高强度可能需要更多时间和 API 额度。")
+                Text(L("较高强度可能需要更多时间和 API 额度。", "Higher effort may take longer and use more API credits."))
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 ScrollView {
                     LazyVStack(spacing: 3) {
@@ -592,8 +592,8 @@ struct ResearchAISettings: View {
                 Image(systemName: "sparkles").font(.title2).foregroundStyle(Color.accentColor)
                     .frame(width: 40, height: 40).background(Color.accentColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("设置 AI 助手").font(.title2.bold())
-                    Text("接入兼容 Chat Completions 的 AI 服务").font(.callout).foregroundStyle(.secondary)
+                    Text(L("设置 AI 助手", "AI assistant settings")).font(.title2.bold())
+                    Text(L("接入兼容 Chat Completions 的 AI 服务", "Connect a Chat Completions-compatible AI service")).font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
@@ -602,27 +602,27 @@ struct ResearchAISettings: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 17) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("API 地址").font(.callout.weight(.semibold))
+                        Text(L("API 地址", "API URL")).font(.callout.weight(.semibold))
                         TextField("https://api.openai.com/v1", text: $base).textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("API 地址")
-                        Text("填写服务商提供的接口地址（含版本路径，例如 /v1）。本机模型可使用 localhost 的 HTTP 地址。")
+                            .accessibilityLabel(L("API 地址", "API URL"))
+                        Text(L("填写服务商提供的接口地址（含版本路径，例如 /v1）。本机模型可使用 localhost 的 HTTP 地址。", "Enter the provider’s API URL, including its version path (e.g. /v1). Local models can use HTTP on localhost."))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("API 密钥").font(.callout.weight(.semibold))
-                        SecureField(hasKey ? "已保存密钥，留空保留" : "密钥（按服务要求填写）", text: $key)
-                            .textFieldStyle(.roundedBorder).disabled(removeKey).accessibilityLabel("API 密钥")
-                        Toggle("移除此地址保存的密钥", isOn: $removeKey).font(.caption).disabled(!hasKey)
-                        Text("密钥存入 macOS 钥匙串，与接口地址绑定。更换接口地址后需要重新填写密钥。")
+                        Text(L("API 密钥", "API key")).font(.callout.weight(.semibold))
+                        SecureField(hasKey ? L("已保存密钥，留空保留", "Key saved; leave blank to keep") : L("密钥（按服务要求填写）", "API key (if required)"), text: $key)
+                            .textFieldStyle(.roundedBorder).disabled(removeKey).accessibilityLabel(L("API 密钥", "API key"))
+                        Toggle(L("移除此地址保存的密钥", "Remove the key for this URL"), isOn: $removeKey).font(.caption).disabled(!hasKey)
+                        Text(L("密钥存入 macOS 钥匙串，与接口地址绑定。更换接口地址后需要重新填写密钥。", "Keys are stored in macOS Keychain and linked to the API URL. Enter the key again when changing the URL."))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Divider()
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("模型名称").font(.callout.weight(.semibold))
+                            Text(L("模型名称", "Model name")).font(.callout.weight(.semibold))
                             Spacer()
                             Button { modelPicker = true } label: {
-                                Label(ai.models(for: base).isEmpty ? "获取模型" : "选择模型（\(ai.models(for: base).count)）", systemImage: "list.bullet")
+                                Label(ai.models(for: base).isEmpty ? L("获取模型", "Load models") : L("选择模型（\(ai.models(for: base).count)）", "Choose model (\(ai.models(for: base).count))"), systemImage: "list.bullet")
                             }
                             .buttonStyle(.bordered)
                             .disabled(!validBase)
@@ -638,17 +638,17 @@ struct ResearchAISettings: View {
                                 })
                             }
                         }
-                        TextField("从列表选择，或输入模型 ID", text: $model).textFieldStyle(.roundedBorder)
+                        TextField(L("从列表选择，或输入模型 ID", "Choose from list or enter model ID"), text: $model).textFieldStyle(.roundedBorder)
                             .focused($focusedModel)
-                            .accessibilityLabel("模型 ID")
+                            .accessibilityLabel(L("模型 ID", "Model ID"))
                             .accessibilityIdentifier("ai-settings-model-id")
-                        Text("获取模型后可搜索并选择。如果服务未提供模型目录，仍可手动输入 ID。")
+                        Text(L("获取模型后可搜索并选择。如果服务未提供模型目录，仍可手动输入 ID。", "Search and select from loaded models. If the provider has no catalog, enter a model ID manually."))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if validBase && !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text("推理强度").font(.callout.weight(.semibold))
-                                    Text(modelOptions.count <= 1 ? "使用服务默认设置" : "按任务选择思考深度")
+                                    Text(L("推理强度", "Reasoning")).font(.callout.weight(.semibold))
+                                    Text(modelOptions.count <= 1 ? L("使用服务默认设置", "Use default settings") : L("按任务选择思考深度", "Choose reasoning depth for the task"))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -657,7 +657,7 @@ struct ResearchAISettings: View {
                             .padding(.vertical, 4)
                         }
                     }
-                    Label("获取模型目录时只会验证接口和密钥。文献内容仅在发送提问时交给所选服务商，API 费用由你的账户承担。", systemImage: "lock.shield")
+                    Label(L("获取模型目录时只会验证接口和密钥。文献内容仅在发送提问时交给所选服务商，API 费用由你的账户承担。", "Model catalog requests only verify the API and key. Document content is sent to the selected service only when you submit a question. API charges apply to your account."), systemImage: "lock.shield")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         .padding(11).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
@@ -669,8 +669,8 @@ struct ResearchAISettings: View {
                 if let error { Text(error).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
                 HStack {
                     Spacer()
-                    Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
-                    Button("保存设置") {
+                    Button(L("取消", "Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
+                    Button(L("保存设置", "Save settings")) {
                         do {
                             try ai.configure(base: base, model: model, key: key, removeKey: removeKey, effort: effort)
                             saved = true
@@ -714,4 +714,19 @@ struct ResearchAISettings: View {
             else { ai.cancelModelLoading() }
         }
     }
+}
+
+/// Existing chats may contain scope descriptions saved in either interface language.
+private func contextTag(_ label: String) -> String {
+    let value = label.lowercased()
+    if value.contains("摘录") || value.contains("excerpt") || value.contains("partial") {
+        return L("节选", "Excerpt")
+    }
+    if value.contains("选中") || value.contains("selected") || value.contains("selection") {
+        return L("选区", "Selection")
+    }
+    if value.contains("全文") || value.contains("full text") {
+        return L("全文", "Full text")
+    }
+    return L("对话", "Chat")
 }

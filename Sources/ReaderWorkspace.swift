@@ -38,8 +38,8 @@ struct ReaderResizableSplit<Main: View, Side: View>: View {
                         })
                     .onHover { active in hovering = active; if active { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() } }
                     .onDisappear { if hovering { NSCursor.arrow.set() }; hovering = false; dragStart = nil; dragWidth = nil }
-                    .help("左右拖动调整侧栏宽度")
-                    .accessibilityLabel("调整侧栏宽度")
+                    .help(L("左右拖动调整侧栏宽度", "Drag horizontally to resize sidebar"))
+                    .accessibilityLabel(L("调整侧栏宽度", "Resize sidebar"))
                     .accessibilityValue("\(Int(size.side))")
                     .accessibilityIdentifier("reader-pane-divider")
                     .accessibilityAdjustableAction { direction in
@@ -64,7 +64,7 @@ struct ReaderResizableSplit<Main: View, Side: View>: View {
         returnToSidebar = onDock
         dockWindow = NSApp.keyWindow ?? NSApp.mainWindow
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 455, height: 680), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "AI 文献助手"
+        window.title = L("AI 文献助手", "AI research assistant")
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.minSize = NSSize(width: 320, height: 360)
@@ -96,11 +96,11 @@ private struct FloatingResearchAIContent: View {
     let dock: () -> Void
     var body: some View {
         if model.importing || model.documentURL == nil || model.showingLibrary && model.library != nil {
-            VStack(spacing: 12) { ProgressView().controlSize(.small); Text("正在准备文献…").foregroundStyle(.secondary) }.frame(minWidth: 300, maxWidth: .infinity, minHeight: 330, maxHeight: .infinity)
+            VStack(spacing: 12) { ProgressView().controlSize(.small); Text(L("正在准备文献…", "Preparing document…")).foregroundStyle(.secondary) }.frame(minWidth: 300, maxWidth: .infinity, minHeight: 330, maxHeight: .infinity)
         } else {
         ResearchAIView(ai: model.researchAI, title: model.documentTitle, paragraphs: model.paragraphs.map(\.text), selectedText: model.notebook.selection?.quote, saveNote: { answer in
-            if model.notebook.addNote(text: answer) { model.status = "AI 回答已保存为文献笔记" }
-            else { model.alert = model.notebook.error ?? "笔记保存失败" }
+            if model.notebook.addNote(text: answer) { model.status = L("AI 回答已保存为文献笔记", "AI response saved as a research note") }
+            else { model.alert = model.notebook.error ?? L("笔记保存失败", "Could not save note") }
         }, onDock: dock)
         .frame(minWidth: 300, minHeight: 330)
         .tint(ReaderBrand.accent).accentColor(ReaderBrand.accent)

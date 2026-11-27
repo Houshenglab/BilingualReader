@@ -115,14 +115,14 @@ final class ParagraphTextView: NSTextView {
         menuAnchor = anchor
         let menu = NSMenu()
         for color in ResearchColor.allCases {
-            let item = NSMenuItem(title: "\(color.label)高亮", action: #selector(highlightFromMenu(_:)), keyEquivalent: "")
+            let item = NSMenuItem(title: L("\(color.label)高亮", "\(color.label) highlight"), action: #selector(highlightFromMenu(_:)), keyEquivalent: "")
             item.target = self; item.representedObject = color.rawValue
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let comment = NSMenuItem(title: "添加批注", action: #selector(commentFromMenu(_:)), keyEquivalent: "")
+        let comment = NSMenuItem(title: L("添加批注", "Add annotation"), action: #selector(commentFromMenu(_:)), keyEquivalent: "")
         comment.target = self; menu.addItem(comment)
-        let copyItem = NSMenuItem(title: "复制", action: #selector(copy(_:)), keyEquivalent: "")
+        let copyItem = NSMenuItem(title: L("复制", "Copy"), action: #selector(copy(_:)), keyEquivalent: "")
         copyItem.target = self; menu.addItem(copyItem)
         return menu
     }
@@ -160,14 +160,14 @@ struct ResearchNotesView: View {
             Divider()
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("搜索笔记和原文", text: $query).textFieldStyle(.plain)
-                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).help("清空搜索") }
+                TextField(L("搜索笔记和原文", "Search notes and source"), text: $query).textFieldStyle(.plain)
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).help(L("清空搜索", "Clear search")) }
             }.padding(9).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 7)).padding(12)
             if filteredNotes.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "note.text").font(.system(size: 29, weight: .light)).foregroundStyle(.secondary)
-                    Text(query.isEmpty ? "记录你的阅读发现" : "没有匹配的笔记").font(.subheadline.weight(.semibold))
-                    Text(query.isEmpty ? "选中文字高亮或添加批注，也可以随时写下独立笔记。" : "试试其他关键词。").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text(query.isEmpty ? L("记录你的阅读发现", "Capture your discoveries") : L("没有匹配的笔记", "No matching notes")).font(.subheadline.weight(.semibold))
+                    Text(query.isEmpty ? L("选中文字高亮或添加批注，也可以随时写下独立笔记。", "Select text to highlight or annotate, or write a standalone note.") : L("试试其他关键词。", "Try another search.")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
@@ -179,34 +179,34 @@ struct ResearchNotesView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .onChange(of: notebook.activeBookID) { _ in query = ""; pendingDelete = nil }
-        .confirmationDialog("删除这条笔记？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {
-            Button("删除", role: .destructive) { if let note = pendingDelete { notebook.delete(note.id) }; pendingDelete = nil }
-            Button("取消", role: .cancel) { pendingDelete = nil }
-        } message: { Text("笔记与对应高亮会一起移除，原始文献不会改变。") }
+        .confirmationDialog(L("删除这条笔记？", "Delete this note?"), isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {
+            Button(L("删除", "Delete"), role: .destructive) { if let note = pendingDelete { notebook.delete(note.id) }; pendingDelete = nil }
+            Button(L("取消", "Cancel"), role: .cancel) { pendingDelete = nil }
+        } message: { Text(L("笔记与对应高亮会一起移除，原始文献不会改变。", "The note and its highlight will be removed. The original document stays unchanged.")) }
     }
     private var header: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("文献笔记").font(.system(size: 16, weight: .semibold))
-                Text("\(notebook.notes.count) 条记录 · 本机保存").font(.caption).foregroundStyle(.secondary)
+                Text(L("文献笔记", "Research notes")).font(.system(size: 16, weight: .semibold))
+                Text(L("\(notebook.notes.count) 条记录 · 本机保存", "\(notebook.notes.count) notes · Stored locally")).font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             Button {
                 notebook.cancelEditing(); notebook.standaloneDraft = true; notebook.draftAnchor = nil
             } label: { Image(systemName: "square.and.pencil").frame(width: 26, height: 26) }
-                .buttonStyle(.borderless).help("新建独立笔记").accessibilityLabel("新建独立笔记")
+                .buttonStyle(.borderless).help(L("新建独立笔记", "New standalone note")).accessibilityLabel(L("新建独立笔记", "New standalone note"))
                 .disabled(notebook.activeBookID == nil || !notebook.draft.isEmpty)
             Button(action: export) { Image(systemName: "square.and.arrow.up").frame(width: 26, height: 26) }
-                .buttonStyle(.borderless).help("导出 Markdown").accessibilityLabel("导出笔记").disabled(notebook.notes.isEmpty)
+                .buttonStyle(.borderless).help(L("导出 Markdown", "Export Markdown")).accessibilityLabel(L("导出笔记", "Export notes")).disabled(notebook.notes.isEmpty)
         }.padding(14)
     }
     private func selectionCard(_ selected: ResearchAnchor) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("选中原文 · \(selected.locationLabel)", systemImage: "text.cursor").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Label(L("选中原文 · \(selected.locationLabel)", "Selected text · \(selected.locationLabel)"), systemImage: "text.cursor").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Button { notebook.selection = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                    .buttonStyle(.plain).help("清除选中文本")
+                    .buttonStyle(.plain).help(L("清除选中文本", "Clear selection"))
             }
             Text(selected.quote).font(.system(size: 12, design: .serif)).lineLimit(2).textSelection(.enabled)
         }.padding(12).background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 9)).padding([.horizontal, .top], 12)
@@ -214,11 +214,11 @@ struct ResearchNotesView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label(notebook.editingNoteID != nil ? "编辑记录" : (anchor == nil ? "独立笔记" : "批注 · \(anchor!.locationLabel)"), systemImage: anchor == nil ? "square.and.pencil" : "text.bubble")
+                Label(notebook.editingNoteID != nil ? L("编辑记录", "Edit note") : (anchor == nil ? L("独立笔记", "Standalone note") : L("批注 · \(anchor!.locationLabel)", "Annotation · \(anchor!.locationLabel)")), systemImage: anchor == nil ? "square.and.pencil" : "text.bubble")
                     .font(.caption.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 if notebook.editingNoteID != nil || !notebook.draft.isEmpty || notebook.standaloneDraft {
-                    Button("取消") { notebook.cancelEditing(); notebook.standaloneDraft = false; notebook.draftAnchor = nil }.font(.caption).buttonStyle(.plain).foregroundStyle(.secondary)
+                    Button(L("取消", "Cancel")) { notebook.cancelEditing(); notebook.standaloneDraft = false; notebook.draftAnchor = nil }.font(.caption).buttonStyle(.plain).foregroundStyle(.secondary)
                 }
             }
             TextEditor(text: $notebook.draft)
@@ -228,7 +228,7 @@ struct ResearchNotesView: View {
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.10), lineWidth: 1))
                 .overlay(alignment: .topLeading) {
-                    if notebook.draft.isEmpty { Text("写下想法、问题或发现…").foregroundStyle(.tertiary).font(.system(size: 13)).padding(.top, 7).padding(.leading, 10).allowsHitTesting(false) }
+                    if notebook.draft.isEmpty { Text(L("写下想法、问题或发现…", "Write a thought, question, or finding…")).foregroundStyle(.tertiary).font(.system(size: 13)).padding(.top, 7).padding(.leading, 10).allowsHitTesting(false) }
                 }
                 .onChange(of: notebook.draft) { next in
                     if notebook.editingNoteID == nil, !next.isEmpty, notebook.draftAnchor == nil, !notebook.standaloneDraft {
@@ -238,7 +238,7 @@ struct ResearchNotesView: View {
                 }
             HStack {
                 Spacer()
-                Button(notebook.editingNoteID == nil ? "保存笔记" : "保存修改") {
+                Button(notebook.editingNoteID == nil ? L("保存笔记", "Save note") : L("保存修改", "Save changes")) {
                     let saved: Bool
                     if let id = notebook.editingNoteID { saved = notebook.update(id, text: notebook.draft) }
                     else { saved = notebook.addNote(text: notebook.draft, anchor: anchor) }
@@ -253,14 +253,14 @@ struct ResearchNotesView: View {
             HStack(spacing: 6) {
                 Image(systemName: note.anchor == nil ? "note.text" : (note.text.isEmpty ? "highlighter" : "text.bubble"))
                     .foregroundStyle(note.color?.color ?? Color.accentColor)
-                Text(note.anchor?.locationLabel ?? "独立笔记").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(note.anchor?.locationLabel ?? L("独立笔记", "Standalone note")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer(minLength: 2)
                 Menu {
-                    if note.anchor != nil { Button("回到原文") { notebook.requestedJump = note } }
-                    Button("编辑笔记") { notebook.beginEditing(note) }
-                    Button("删除记录", role: .destructive) { pendingDelete = note }
+                    if note.anchor != nil { Button(L("回到原文", "Go to source")) { notebook.requestedJump = note } }
+                    Button(L("编辑笔记", "Edit note")) { notebook.beginEditing(note) }
+                    Button(L("删除记录", "Delete note"), role: .destructive) { pendingDelete = note }
                 } label: { Image(systemName: "ellipsis").frame(width: 17, height: 17) }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("笔记操作")
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help(L("笔记操作", "Note actions"))
                     .disabled(!notebook.draft.isEmpty && notebook.editingNoteID != note.id)
             }
             if let source = note.anchor?.quote {
@@ -275,19 +275,19 @@ struct ResearchNotesView: View {
             HStack {
                 Text(note.createdAt.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
-                if note.anchor != nil { Button { notebook.requestedJump = note } label: { Label("回到原文", systemImage: "arrow.up.left") }.font(.caption).buttonStyle(.plain).foregroundStyle(Color.accentColor) }
+                if note.anchor != nil { Button { notebook.requestedJump = note } label: { Label(L("回到原文", "Go to source"), systemImage: "arrow.up.left") }.font(.caption).buttonStyle(.plain).foregroundStyle(Color.accentColor) }
             }
         }.padding(11).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9))
             .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary.opacity(0.08), lineWidth: 1))
     }
     private func export() {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.init(filenameExtension: "md") ?? .plainText]
-        panel.nameFieldStringValue = "文献笔记.md"
+        panel.nameFieldStringValue = L("文献笔记.md", "Research Notes.md")
         let content = notebook.markdown()
         panel.begin { result in
             guard result == .OK, let url = panel.url else { return }
             do { try content.write(to: url, atomically: true, encoding: .utf8) }
-            catch { notebook.error = "导出失败：\(error.localizedDescription)" }
+            catch { notebook.error = L("导出失败：\(error.localizedDescription)", "Export failed: \(error.localizedDescription)") }
         }
     }
 }

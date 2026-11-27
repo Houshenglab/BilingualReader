@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8">
+<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; font-src data: blob:; connect-src 'none'">
 <script src="jszip.min.js"></script><script src="docx-preview.min.js"></script>
 <style>
@@ -16,9 +16,18 @@ p[data-rid]{cursor:pointer}p[data-rid]:hover{outline:1px solid #b1c4dc;outline-o
 .reader-note-marker:focus-visible{outline:2px solid #3866a8;outline-offset:2px}
 .reader-note-target{outline:2px solid #0d817a;outline-offset:4px}
 @media(prefers-color-scheme:dark){html,body{background:#1f1f1f;color:#e4e4e4}}
-</style></head><body><div id="loading">正在恢复 Word 原文排版…</div><div id="styles"></div><div id="document"></div>
+</style></head><body><div id="loading"></div><div id="styles"></div><div id="document"></div>
 <script>
 let nodes=[], visible=new Set(), automatic=false, observer;
+let readerLanguage='en';
+const L=(chinese,english)=>readerLanguage==='zh-CN'?chinese:english;
+function setReaderLanguage(language){
+ readerLanguage=language==='zh-CN'?'zh-CN':'en';
+ document.documentElement.lang=readerLanguage;
+ const loading=document.getElementById('loading');
+ if(loading)loading.textContent=L('正在恢复 Word 原文排版…','Restoring Word layout…');
+}
+setReaderLanguage(readerLanguage);
 const post=payload=>window.webkit.messageHandlers.reader.postMessage(payload);
 function toggle(id){post({kind:'toggle',id});}
 async function renderWord(base64){
@@ -26,7 +35,7 @@ async function renderWord(base64){
  await docx.renderAsync(bytes,document.getElementById('document'),document.getElementById('styles'),{ignoreHeight:true,ignoreWidth:false,ignoreFonts:false,breakPages:true,ignoreLastRenderedPageBreak:true,useBase64URL:true,renderAltChunks:false,renderComments:false});
  nodes=Array.from(document.querySelectorAll('#document article p')).filter(p=>p.innerText.trim().length>0);
  nodes.forEach((p,id)=>{
-  p.dataset.rid=id;p.tabIndex=0;p.title='点击展开或收起中文';
+  p.dataset.rid=id;p.tabIndex=0;p.title=L('点击展开或收起中文','Click to show or hide translation');
   p.addEventListener('click',e=>{if(e.target.closest('a,button')||window.getSelection().toString().length)return;toggle(id)});
   p.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target===p){e.preventDefault();toggle(id)}});
  });
@@ -40,11 +49,11 @@ function updateReader(states,auto){
   let target=document.getElementById('translation-'+s.id);
   if(!s.expanded){if(target)target.remove();continue}
   if(!target){target=document.createElement('div');target.id='translation-'+s.id;p.after(target)}
-  target.className='reader-translation';target.onclick=null;target.setAttribute('role','status');target.setAttribute('lang','zh-CN');
+  target.className='reader-translation';target.onclick=null;target.setAttribute('role','status');target.setAttribute('lang',s.translation?'zh-CN':readerLanguage);
   if(s.translation){target.textContent=s.translation}
-  else if(s.paused&&s.activity){target.classList.add('pending');target.textContent='翻译已暂停';const b=document.createElement('button');b.textContent='继续翻译';b.onclick=()=>post({kind:'resume',id:s.id});target.append(b)}
-  else if(s.error){target.classList.add('error');target.textContent=s.error;const b=document.createElement('button');b.textContent='重试';b.onclick=()=>post({kind:'retry',id:s.id});target.append(b)}
-  else{target.classList.add('pending');target.textContent=s.loading?(s.activity||'等待翻译…'):'已停止，点击此处继续翻译';if(!s.loading||s.activity==='等待翻译…')target.onclick=()=>post({kind:'retry',id:s.id})}
+  else if(s.paused&&s.activity){target.classList.add('pending');target.textContent=L('翻译已暂停','Translation paused');const b=document.createElement('button');b.textContent=L('继续翻译','Resume');b.onclick=()=>post({kind:'resume',id:s.id});target.append(b)}
+  else if(s.error){target.classList.add('error');target.textContent=s.error;const b=document.createElement('button');b.textContent=L('重试','Retry');b.onclick=()=>post({kind:'retry',id:s.id});target.append(b)}
+  else{target.classList.add('pending');target.textContent=s.loading?(s.activityText||L('等待翻译…','Waiting for translation…')):L('已停止，点击此处继续翻译','Stopped. Click to resume translation.');if(!s.loading||s.activity==='等待翻译…')target.onclick=()=>post({kind:'retry',id:s.id})}
  }
  const was=automatic;automatic=auto;
  if(automatic&&!was)for(const id of visible){if(/[A-Za-z]{3}/.test(nodes[id].innerText))post({kind:'visible',id})}
@@ -140,7 +149,7 @@ function updateAnnotations(notes){
   const comments=available.filter(n=>n.hasComment);
   if(comments.length){
    const marker=document.createElement('button');marker.type='button';marker.className='reader-note-marker';
-   marker.title=comments.length+' 条批注';marker.setAttribute('aria-label',marker.title);
+   marker.title=L(comments.length+' 条批注','Comments: '+comments.length);marker.setAttribute('aria-label',marker.title);
    marker.setAttribute('data-note-ids',comments.map(n=>n.id).join(' '));
    marker.textContent='';marker.dataset.count=String(comments.length);
    marker.onclick=e=>{e.stopPropagation();post({kind:'annotationClicked',noteID:comments[0].id})};
