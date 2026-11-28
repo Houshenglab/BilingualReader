@@ -144,3 +144,5 @@ zsh check-pdf.sh '/path/to/African rice cultivation linked to rising methane.pdf
 **Houshenglab 出品 · 软件永久免费、开源。** 喜欢这个工具的话，欢迎在 GitHub 点个 Star；如果它节省了你的时间，也欢迎自愿请作者喝杯咖啡。打赏不是使用条件，不影响任何功能。
 
 [微信扫码赞赏 · 请 Houshenglab 喝杯咖啡](https://github.com/Houshenglab/Synapse-releases/releases/download/v1.1.138-build146/Houshenglab-WeChat-tip.png)
+
+<a href="https://github.com/Houshenglab/Synapse-releases/releases/download/v1.1.138-build146/Houshenglab-WeChat-tip.png"><img src="https://raw.githubusercontent.com/Houshenglab/Synapse-releases/eb5043daf1ecaadc53d6aec48be4f26d0ded1a02/Houshenglab-WeChat-tip.png" alt="Houshenglab WeChat appreciation code" width="260"></a>
