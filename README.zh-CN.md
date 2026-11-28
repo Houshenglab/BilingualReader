@@ -138,3 +138,7 @@ zsh check-pdf.sh '/path/to/African rice cultivation linked to rising methane.pdf
 ## 许可
 
 本项目新增代码采用 [MIT License](LICENSE)。必应请求适配参考 Jingyuan-Zheng/translate-document-quick-action；pdfminer.six、Python、docx-preview、JSZip 等组件保留各自许可，详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+
+## 支持作者
+
+**Houshenglab 出品 · 软件永久免费、开源。** 喜欢这个工具的话，欢迎在 GitHub 点个 Star；如果它节省了你的时间，也欢迎自愿请作者喝杯咖啡。打赏不是使用条件，不影响任何功能。
