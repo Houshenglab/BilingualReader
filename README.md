@@ -43,3 +43,7 @@ zsh check-word.sh fixtures/rich-example.docx
 The output is dist/BilingualReader.app and dist/BilingualReader-Mac.zip. See the [Chinese documentation](README.zh-CN.md) for full build and verification details.
 
 MIT licensed. See [third-party notices](THIRD-PARTY-NOTICES.md).
+
+## Support the author
+
+**Made by Houshenglab · Free and open source.** If this tool saves you time, a GitHub star or an optional cup of coffee is warmly appreciated. Support is entirely voluntary and never unlocks features.
