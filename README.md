@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 **A macOS reader for research papers, with bilingual translation, annotation and AI-assisted reading.** Read PDF, Word (DOCX) and TXT documents in a single organized library.
 
-[Download for macOS](https://github.com/Houshenglab/BilingualReader/releases/download/v0.9.0/BilingualReader-0.9.0-macOS-arm64.zip) · [Releases](https://github.com/Houshenglab/BilingualReader/releases) · [Changelog](CHANGELOG.md)
+[Download for macOS](https://github.com/Houshenglab/BilingualReader/releases/download/v0.9.0/BilingualReader-0.9.0-macOS-arm64.zip) · [Releases](https://github.com/Houshenglab/BilingualReader/releases) · [Official website](https://test.mibhr.cn/bilingualreader/en/) · [Changelog](CHANGELOG.md)
 
 ## Features
 
@@ -47,3 +47,5 @@ MIT licensed. See [third-party notices](THIRD-PARTY-NOTICES.md).
 ## Support the author
 
 **Made by Houshenglab · Free and open source.** If this tool saves you time, a GitHub star or an optional cup of coffee is warmly appreciated. Support is entirely voluntary and never unlocks features.
+
+[WeChat appreciation code · Buy Houshenglab a coffee](https://github.com/Houshenglab/Synapse-releases/releases/download/v1.1.138-build146/Houshenglab-WeChat-tip.png)
