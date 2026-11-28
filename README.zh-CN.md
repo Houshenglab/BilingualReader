@@ -8,7 +8,7 @@
 
 把英文论文、研究报告和笔记整理到分类书架中，在阅读原文时展开中文译文。支持整段与全文翻译，自动保存阅读位置及已完成译文。0.8.0 新增高亮批注、文献笔记和可配置 AI 助手。
 
-[下载最新版](https://github.com/Houshenglab/BilingualReader/releases/latest) · [版本记录](CHANGELOG.md) · [第三方许可](THIRD-PARTY-NOTICES.md)
+[下载最新版](https://github.com/Houshenglab/BilingualReader/releases/latest) · [产品官网](https://test.mibhr.cn/bilingualreader/) · [版本记录](CHANGELOG.md) · [第三方许可](THIRD-PARTY-NOTICES.md)
 
 ## 主要功能
 
@@ -142,3 +142,5 @@ zsh check-pdf.sh '/path/to/African rice cultivation linked to rising methane.pdf
 ## 支持作者
 
 **Houshenglab 出品 · 软件永久免费、开源。** 喜欢这个工具的话，欢迎在 GitHub 点个 Star；如果它节省了你的时间，也欢迎自愿请作者喝杯咖啡。打赏不是使用条件，不影响任何功能。
+
+[微信扫码赞赏 · 请 Houshenglab 喝杯咖啡](https://github.com/Houshenglab/Synapse-releases/releases/download/v1.1.138-build146/Houshenglab-WeChat-tip.png)
