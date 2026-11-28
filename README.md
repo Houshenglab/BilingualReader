@@ -49,3 +49,5 @@ MIT licensed. See [third-party notices](THIRD-PARTY-NOTICES.md).
 **Made by Houshenglab · Free and open source.** If this tool saves you time, a GitHub star or an optional cup of coffee is warmly appreciated. Support is entirely voluntary and never unlocks features.
 
 [WeChat appreciation code · Buy Houshenglab a coffee](https://github.com/Houshenglab/Synapse-releases/releases/download/v1.1.138-build146/Houshenglab-WeChat-tip.png)
+
+<a href="https://github.com/Houshenglab/Synapse-releases/releases/download/v1.1.138-build146/Houshenglab-WeChat-tip.png"><img src="https://raw.githubusercontent.com/Houshenglab/Synapse-releases/eb5043daf1ecaadc53d6aec48be4f26d0ded1a02/Houshenglab-WeChat-tip.png" alt="Houshenglab WeChat appreciation code" width="260"></a>
